@@ -1,0 +1,58 @@
+# Deploy Web-Slinger to GitHub Pages.
+#
+# Fires ONLY on the working branch, so the deploy target is the same branch the
+# work lands on and there is no second branch to keep in sync. Point
+# Settings → Pages → Source at "GitHub Actions" once and this owns the rest.
+#
+# `needs: ci` gates the deploy on the guard + smoke jobs: a red build never
+# reaches the URL. ci.yml exposes workflow_call precisely for this.
+name: pages
+
+on:
+  push:
+    branches: ["claude/spiderman-game-f1-graphics-qn3e2e"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deploy at a time; never cancel one mid-flight — a half-published Pages
+# artifact is worse than a slightly stale site.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  deploy:
+    needs: ci
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # Ship the RUNTIME subset only. tests/, tools/, docs/ and node_modules are
+      # not served, and the Pages artifact is an upload of the whole tree — so
+      # excluding them is the difference between a fast deploy and a slow one.
+      - name: Stage the runtime subset
+        run: |
+          mkdir -p _site
+          cp -r index.html sw.js manifest.json version.json css js assets icons _site/
+          # .nojekyll: without it Pages runs Jekyll, which drops any path with a
+          # leading underscore. Harmless today, silent data loss the day someone
+          # adds one.
+          touch _site/.nojekyll
+          du -sh _site
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4

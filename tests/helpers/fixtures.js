@@ -98,6 +98,13 @@ export const test = base.extend({
 // On any failure, attach everything that explains it and nothing that does not.
 // All attachments are free on a passing test — only collected when red.
 test.afterEach(async ({ page }, testInfo) => {
+  // Quiesce the render loop FIRST, on pass and on fail alike. Playwright tears
+  // the context down while the page is still driving requestAnimationFrame,
+  // and under SwiftShader that starves teardown past the whole test timeout —
+  // it surfaces as 'Tearing down "context" exceeded the test timeout', which
+  // reads like a hung browser rather than a busy one.
+  await page.evaluate(() => { try { window.__spidey?.headless(true); } catch (_) {} }).catch(() => {});
+
   if (testInfo.status === testInfo.expectedStatus) return;
   const lines = consoleByPage.get(page);
   if (lines && lines.length) {

@@ -2,18 +2,22 @@
    of Apex 26's input.js keeping its load-bearing shapes: no DOM access at
    module eval (everything wires inside init(), so the module imports headless),
    consume-once edge latches, and a poll() the loop calls once per frame.
-   The full multi-source port (touch sticks, tilt, One-Euro) is Phase 2. */
+   Touch lives in ./touch.js and merges in through the same accessors; tilt
+   and One-Euro filtering are still Phase 2. */
+import { Touch } from "./touch.js";
 
 const keys = new Set();
 let lookDX = 0, lookDY = 0;            // consumed mouse deltas (camera orbit)
 let jumpEdge = false, zipEdge = false, camEdge = false;
 let pad = null, padPrev = [];
-let canvasEl = null, onPauseCb = null;
+let canvasEl = null, onPauseCb = null, onMusicCb = null, onNextCb = null;
 
 export const Input = {
   init(canvas, opts) {
     canvasEl = canvas;
     onPauseCb = opts && opts.onPause;
+    onMusicCb = opts && opts.onMusicToggle;
+    onNextCb = opts && opts.onNextTrack;
     window.addEventListener("keydown", (e) => {
       if (/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || "")) return;
       if (e.repeat) { keys.add(e.code); return; }
@@ -23,6 +27,8 @@ export const Input = {
       if (e.code === "KeyE" || e.code === "KeyK") zipEdge = true;
       if (e.code === "KeyC") camEdge = true;
       if (e.code === "Escape" && onPauseCb) onPauseCb();
+      if (e.code === "KeyM" && onMusicCb) onMusicCb();
+      if (e.code === "KeyN" && onNextCb) onNextCb();
       if (["Space", "ArrowUp", "ArrowDown"].includes(e.code)) e.preventDefault();
     });
     window.addEventListener("keyup", (e) => keys.delete(e.code));
@@ -45,7 +51,13 @@ export const Input = {
     canvas.addEventListener("pointercancel", end);
     canvas.addEventListener("lostpointercapture", end);
     window.addEventListener("gamepadconnected", (e) => { pad = e.gamepad.index; });
+    // Mounted on the body, not the canvas: the canvas is the look-drag
+    // surface, and a child of it would swallow the drags it is meant to leave
+    // alone. opts.forceTouch is the desktop/test override.
+    Touch.create(document.body, { force: opts && opts.forceTouch });
   },
+
+  get touchActive() { return Touch.state.active; },
 
   poll() {
     if (pad == null) return;
@@ -60,25 +72,31 @@ export const Input = {
   },
 
   // continuous
+  // Every source is merged the same way: the LAST source to hold a non-zero
+  // value wins, so a plugged-in gamepad does not veto the thumbstick and vice
+  // versa. Zero from an idle source never overwrites a live one.
   moveX() {   // -1..1 strafe (A/D)
     let v = (keys.has("KeyD") ? 1 : 0) - (keys.has("KeyA") ? 1 : 0);
     const g = pad != null && navigator.getGamepads && navigator.getGamepads()[pad];
     if (g && Math.abs(g.axes[0]) > 0.15) v = g.axes[0];
+    if (Touch.state.moveX) v = Touch.state.moveX;
     return v;
   },
   moveZ() {   // -1..1 forward (W/S; +1 = forward)
     let v = (keys.has("KeyW") || keys.has("ArrowUp") ? 1 : 0) - (keys.has("KeyS") || keys.has("ArrowDown") ? 1 : 0);
     const g = pad != null && navigator.getGamepads && navigator.getGamepads()[pad];
     if (g && Math.abs(g.axes[1]) > 0.15) v = -g.axes[1];
+    if (Touch.state.moveZ) v = Touch.state.moveZ;
     return v;
   },
   swing() {
     const g = pad != null && navigator.getGamepads && navigator.getGamepads()[pad];
-    return keys.has("Space") || !!(g && g.buttons[7] && g.buttons[7].pressed);   // RT
+    return keys.has("Space") || Touch.state.swing || !!(g && g.buttons[7] && g.buttons[7].pressed);   // RT
   },
   dive() {
     const g = pad != null && navigator.getGamepads && navigator.getGamepads()[pad];
-    return keys.has("ControlLeft") || keys.has("KeyX") || !!(g && g.buttons[6] && g.buttons[6].pressed);
+    return keys.has("ControlLeft") || keys.has("KeyX") || Touch.state.dive ||
+      !!(g && g.buttons[6] && g.buttons[6].pressed);
   },
   look() {    // consumed mouse/right-stick deltas
     const g = pad != null && navigator.getGamepads && navigator.getGamepads()[pad];
@@ -88,9 +106,13 @@ export const Input = {
     return [dx, dy];
   },
 
-  // consume-once edges
-  consumeJump() { const v = jumpEdge; jumpEdge = false; return v; },
-  consumeZip() { const v = zipEdge; zipEdge = false; return v; },
-  consumeCameraCycle() { const v = camEdge; camEdge = false; return v; },
-  clearEdges() { jumpEdge = zipEdge = camEdge = false; },
+  // consume-once edges — a touch latch is consumed here too, so a tap that
+  // lands between two frames is never dropped and never fires twice.
+  consumeJump() { const v = jumpEdge || Touch.state.jumpEdge; jumpEdge = Touch.state.jumpEdge = false; return v; },
+  consumeZip() { const v = zipEdge || Touch.state.zipEdge; zipEdge = Touch.state.zipEdge = false; return v; },
+  consumeCameraCycle() { const v = camEdge || Touch.state.camEdge; camEdge = Touch.state.camEdge = false; return v; },
+  clearEdges() {
+    jumpEdge = zipEdge = camEdge = false;
+    Touch.state.jumpEdge = Touch.state.zipEdge = Touch.state.camEdge = false;
+  },
 };

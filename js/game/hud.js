@@ -15,5 +15,13 @@ export function createHud(els) {
       hText(els.mode, hero.state);
     },
     show(on) { els.hud.hidden = !on; },
+    /* Named track, shown briefly on change. Not on the update() path — it
+       fires on a track boundary, which is minutes apart, so it costs nothing
+       to write straight through. */
+    setTrack(t) {
+      if (!els.track) return;
+      els.track.hidden = !t;
+      if (t) hText(els.trackV, t.title);
+    },
   };
 }

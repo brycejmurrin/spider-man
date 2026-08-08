@@ -109,6 +109,10 @@ export function createApi(G) {
       return { y: G.city.colliders.groundY(x == null ? hero.p[0] : x, z == null ? hero.p[2] : z, 1e9) };
     },
     raycast(o, d, maxT) { return G.city ? G.city.colliders.raycast(o, d, maxT || 100) : null; },
+    /* Is this world point on (or within r of) a building surface? The right
+       question for "did the web land on something": a ray cast at a point on a
+       vertical face runs tangent to it and misses. */
+    nearGeometry(pt, r) { return G.city ? G.city.colliders.sphereClip(pt, r || 0.5) : null; },
     lightState() {
       const L = G.frame.lights;
       return { numLights: L ? L.length / 15 : 0, exposure: G.frame.exposure,

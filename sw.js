@@ -7,10 +7,12 @@
 //     discovered by fetching+parsing the shell's OWN <script src>/<link href>
 //     tags at install time — whatever index.html actually loads is what gets
 //     cached, automatically, forever in sync with the existing `?v=N` bump.
-//   - Everything else (audio/sfx under assets/, the Jolpica/OpenF1 API is
-//     cross-origin and never touched) is cached opportunistically the first
-//     time it's fetched, so a full offline install follows naturally from one
-//     normal play session.
+//   - Everything else under assets/ is cached opportunistically the first time
+//     it's fetched, so a full offline install follows naturally from one normal
+//     play session. The soundtrack in particular MUST stay out of the install
+//     set: three tracks is ~17 MB against a 5 MB shell, and a precache that
+//     large turns first load into a stall on a phone — and fails the whole
+//     install on a device with a tight cache quota.
 //
 // Cache name embeds version.json's build number, so every cache-bust bump
 // (already required for any JS/CSS change per CLAUDE.md) automatically starts

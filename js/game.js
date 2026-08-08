@@ -79,7 +79,10 @@ import { createApi } from "./game/spidey-api.js";
 
   const webline = createWebline(gfx);
   const cams = createCameras(city.colliders);
-  const hud = createHud({ hud: $("hud"), speed: $("speed-v"), alt: $("alt-v"), mode: $("mode-v") });
+  const hud = createHud({
+    hud: $("hud"), speed: $("speed-v"), alt: $("alt-v"), mode: $("mode-v"),
+    track: $("track"), trackV: $("track-v"),
+  });
 
   // ── frame state (the night-city preset distilled from Apex 26) ───────────
   const frame = {
@@ -391,7 +394,13 @@ import { createApi } from "./game/spidey-api.js";
     document.body.classList.add("playing");
     cams.snap({ p: hero.p, v: hero.v, head: hero.head, speed: 0, state: hero.state });
   }
-  $("mb-play").addEventListener("click", () => { GameAudio.init(); GameAudio.uiSelect(); play(); });
+  /* Both audio subsystems start on THIS gesture and nowhere else: a WebAudio
+     context created outside a user gesture starts suspended, and
+     HTMLAudioElement.play() outside one rejects. One click arms both. */
+  $("mb-play").addEventListener("click", () => {
+    GameAudio.init(); GameAudio.uiSelect(); GameAudio.startMusic(); play();
+  });
+  GameAudio.onTrackChange((t) => hud.setTrack(t));
   $("pm-resume").addEventListener("click", () => { paused = false; $("pausemenu").close(); });
   $("pm-restart").addEventListener("click", () => {
     hero.reset(startB.cx, startB.y1, startB.cz - 2, 0, 0);
@@ -405,6 +414,9 @@ import { createApi } from "./game/spidey-api.js";
       const pm = $("pausemenu");
       if (paused) pm.showModal(); else pm.close();
     },
+    onMusicToggle: () => { GameAudio.setMusic(!GameAudio.music); },
+    onNextTrack: () => { GameAudio.nextTrack(); },
+    forceTouch: store.get("touch", null),
   });
   window.addEventListener("resize", () => gfx.resize());
 

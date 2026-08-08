@@ -75,6 +75,15 @@ have been hidden by a larger epsilon.
 **Report which case failed, not that one did.** Sweeps collect offenders and
 assert the collection is empty, so the message names the position.
 
+**Verify a geometric claim with the query that actually answers it.** The
+"webs terminate on real geometry" spec first verified each anchor with a short
+downward ray, and failed: an anchor sitting on a *vertical* face has a downward
+ray running tangent to that face, so it misses. Measured — 1 of 5 genuine
+anchors detected. It read as a traversal bug for as long as it took to check the
+same five points with `nearGeometry()` (a sphere overlap), which found all five.
+When a spec fails on something the screenshots say is fine, suspect the
+instrument before the subject.
+
 ## 4. Adding a spec
 
 1. Import from `tests/helpers/fixtures.js`, not `@playwright/test` — that is

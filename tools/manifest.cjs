@@ -48,6 +48,7 @@ const MODULES = [
   "js/game/hero.js",
   "js/game/webline.js",
   "js/game/cameras.js",
+  "js/game/touch.js",
   "js/game/input.js",
   "js/game/hud.js",
   "js/game/audio.js",

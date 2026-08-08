@@ -113,17 +113,19 @@ test.describe("headless traversal", () => {
         if (sw.anchor) anchors.push({ a: sw.anchor, t: sw.tether });
       }
       return anchors.map(({ a, t }) => {
-        // A point ON a surface: a tiny ray straight down from just above the
-        // anchor must hit something, unless it is a synthetic assist anchor.
-        const hit = S.raycast([a[0], a[1] + 0.6, a[2]], [0, -1, 0], 2.0);
-        return { hit: !!hit, t };
+        // "Is this point on a building?" is a PROXIMITY question, not a ray
+        // question. A downward ray from just above an anchor on a VERTICAL
+        // face runs tangent to that face and misses — measured: 1 of 5 real
+        // anchors detected, which read as a game bug and was a test bug.
+        // A small sphere at the anchor answers it correctly for every face.
+        return { hit: !!S.nearGeometry(a, 0.5), t };
       });
     });
     expect(r.length).toBeGreaterThan(50);
     const grounded = r.filter((x) => x.hit).length / r.length;
     // The never-stranded assist deliberately synthesises an anchor in open air
-    // when nothing is castable, so this is a majority check, not a totality one.
-    expect(grounded, "most anchors must be on real geometry").toBeGreaterThan(0.6);
+    // when nothing is castable, so this is a strong majority, not a totality.
+    expect(grounded, "webs must terminate on real geometry").toBeGreaterThan(0.9);
     expect(Math.max(...r.map((x) => x.t))).toBeLessThanOrEqual(45.001);
   });
 

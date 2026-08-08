@@ -166,12 +166,19 @@ __spidey.place(x, y, z, speed, head); __spidey.reset(frac, y, speed)
 __spidey.headless(true); __spidey.obs(); __spidey.act(input, dt, n); __spidey.step(dt, n)
 __spidey.camera("chase"); __spidey.cameraModes(); __spidey.snapCam(); __spidey.camState()
 __spidey.city(); __spidey.swing(); __spidey.groundY(x, z); __spidey.raycast(o, d, maxT)
+__spidey.nearGeometry(pt, r)         // "is this point ON a building?" — see below
 __spidey.lightState(); __spidey.seed(n); __spidey.logs({ ns: "city" })
 ```
 
 Sharp edges: `obs()` returns null until the hero is placed; `park()` freezes the
 scene, so call `freeze(false)` before driving; `snapCam()` is required after any
 teleport, before a capture.
+
+**"Did the web land on something?" is a proximity question, not a ray question.**
+Use `nearGeometry(pt, r)`, never a probe ray. A ray cast at a point that already
+lies on a *vertical* face runs tangent to that face and misses it — measured, 1
+of 5 genuine anchors detected, which reads as a traversal bug and is a test bug.
+A small sphere at the point answers correctly for every face orientation.
 
 ## Git branch
 

@@ -3,7 +3,14 @@
    parts its header calls non-negotiable: init() only from a user gesture,
    persistent resume listeners (iOS suspends and never self-resumes), never
    tear the context down on a timer, and the blip()/noise() synth primitives
-   every one-shot composes from. */
+   every one-shot composes from.
+
+   The soundtrack is deliberately NOT in the WebAudio graph. A
+   MediaElementSource would put an 8 MB stream behind the same suspended
+   context the synth sits behind, so a browser that blocks the context blocks
+   the music too — and it would decode the whole file into memory instead of
+   streaming it. Plain <audio> elements stream, seek and survive a suspended
+   context, at the cost of one extra volume knob to keep in step. */
 import { store } from "./store.js";
 
 let ctx = null, master = null, sfxBus = null;
@@ -69,6 +76,41 @@ function noise(peak, decay, filterFreq, when) {
   src.onended = () => { src.disconnect(); f.disconnect(); g.disconnect(); };
 }
 
+/* ── soundtrack ─────────────────────────────────────────────────────────────
+   Streamed <audio>, one element per track so the next one is already buffered
+   when the current ends. `preload="none"` on all but the first: three tracks
+   at 192 kbps is 17 MB, and fetching all of it during boot competes with the
+   asset pack for the same connection. */
+const TRACKS = [
+  { id: "webslinger1", src: "assets/music/webslinger1.mp3", title: "Webslinger I" },
+  { id: "webslinger2", src: "assets/music/webslinger2.mp3", title: "Webslinger II" },
+  { id: "webslinger-ps", src: "assets/music/webslinger-ps.mp3", title: "Webslinger (PS)" },
+];
+
+let els = null, cur = 0, musicOn = store.get("music", true);
+let musicVol = store.get("musicVol", 0.55);
+let onTrack = null;   // driver hook, so the HUD can name the track
+
+function musicEls() {
+  if (els) return els;
+  els = TRACKS.map((t, i) => {
+    const a = new Audio();
+    a.src = t.src;
+    a.preload = i === 0 ? "auto" : "none";
+    a.volume = 0;                        // faded in by applyMusicVol
+    a.addEventListener("ended", () => GameAudio.nextTrack());
+    // A missing/undecodable file must not take the game with it: skip on.
+    a.addEventListener("error", () => { if (i === cur) GameAudio.nextTrack(); });
+    return a;
+  });
+  return els;
+}
+
+function applyMusicVol() {
+  if (!els) return;
+  els.forEach((a, i) => { a.volume = i === cur && musicOn ? musicVol : 0; });
+}
+
 export const GameAudio = {
   init() {   // ONLY from a user gesture
     if (ctx) { resumeIfNeeded(); return; }
@@ -83,6 +125,51 @@ export const GameAudio = {
     if (master) master.gain.setTargetAtTime(on ? 0.8 : 0, ctx ? now() : 0, 0.05);
   },
   get enabled() { return enabled; },
+
+  // ── soundtrack ───────────────────────────────────────────────────────────
+  /* startMusic() — ONLY from a user gesture, same as init(). play() rejects
+     outside one, and an unhandled rejection here would surface as a page
+     error in the smoke spec. */
+  startMusic() {
+    if (!musicOn) return false;
+    const a = musicEls()[cur];
+    if (!a) return false;
+    a.preload = "auto";
+    applyMusicVol();
+    a.play().catch(() => {});   // blocked autoplay is not an error worth raising
+    if (onTrack) onTrack(TRACKS[cur]);
+    return true;
+  },
+  nextTrack() {
+    if (!els) return null;
+    const prev = els[cur];
+    try { prev.pause(); prev.currentTime = 0; } catch (_) {}
+    cur = (cur + 1) % TRACKS.length;
+    const a = els[cur];
+    a.preload = "auto";
+    applyMusicVol();
+    if (musicOn) a.play().catch(() => {});
+    if (onTrack) onTrack(TRACKS[cur]);
+    return TRACKS[cur];
+  },
+  setMusic(on) {
+    musicOn = on; store.set("music", on);
+    if (!els) { if (on) GameAudio.startMusic(); return musicOn; }
+    applyMusicVol();
+    if (on) els[cur].play().catch(() => {}); else els[cur].pause();
+    if (onTrack) onTrack(on ? TRACKS[cur] : null);
+    return musicOn;
+  },
+  setMusicVol(v) {
+    musicVol = Math.max(0, Math.min(1, v));
+    store.set("musicVol", musicVol);
+    applyMusicVol();
+    return musicVol;
+  },
+  get music() { return musicOn; },
+  get musicVol() { return musicVol; },
+  get track() { return musicOn && els ? TRACKS[cur] : null; },
+  onTrackChange(fn) { onTrack = fn; },
 
   /* wind loop, driven by speed01 every frame — loudens AND brightens */
   setWind(speed01) {
