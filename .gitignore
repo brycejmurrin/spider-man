@@ -1,0 +1,27 @@
+# Agent working directories (git worktrees created by background agents) and
+# local Claude settings — but keep the shared developer skills tracked.
+.claude/*
+!.claude/skills/
+!.claude/workflows/
+
+# Node (both the real dir and the self-referential symlink worktree runs create)
+node_modules/
+node_modules
+
+# Regenerable output
+scratch/
+artifacts/
+
+# Transient agent/debug scripts must be underscore-prefixed.
+tools/_*.mjs
+tools/_*.cjs
+tools/_*.js
+# ...and stray dotfiles/backups a parallel agent leaves behind, which a
+# blanket `git add -A` would otherwise commit (tools/.vt-warn.cjs did).
+tools/.*
+*.bak
+*.orig
+*~
+
+# git worktrees for isolated agent work
+.worktrees/

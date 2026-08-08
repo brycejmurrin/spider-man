@@ -1,0 +1,20 @@
+{
+  "name": "web-slinger",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node tools/run-playwright.mjs",
+    "test:update": "node tools/run-playwright.mjs --update-snapshots",
+    "test:render": "node tools/run-playwright.mjs --project=render --workers=2",
+    "test:headless": "node tools/run-playwright.mjs --project=headless",
+    "test:smoke": "node tools/run-playwright.mjs tests/specs/smoke.spec.js",
+    "test:swing": "node tools/run-playwright.mjs tests/specs/swing.spec.js",
+    "test:visual": "node tools/run-playwright.mjs tests/specs/city-visual.spec.js",
+    "test:tooling-fast": "node --test tests/unit/*.test.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.1",
+    "playwright": "^1.61.0"
+  }
+}

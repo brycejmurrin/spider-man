@@ -1,0 +1,16 @@
+{
+  "name": "Web-Slinger",
+  "short_name": "Web-Slinger",
+  "description": "Unofficial Spider-Man-inspired open-city fan game — swing through a procedural neon city in 3D WebGL.",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#07070d",
+  "theme_color": "#07070d",
+  "icons": [
+    { "src": "icons/icon-180.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ],
+  "categories": ["games", "entertainment"]
+}

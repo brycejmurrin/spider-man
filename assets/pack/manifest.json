@@ -1,0 +1,343 @@
+{
+  "version": 1,
+  "materials": {
+    "size": 256,
+    "layers": [
+      {
+        "mat": 1,
+        "id": "concrete",
+        "scale": 4,
+        "source": "polyhaven:concrete_floor_02",
+        "licence": "CC0",
+        "author": "Poly Haven contributors"
+      },
+      {
+        "mat": 2,
+        "id": "brick",
+        "scale": 2.4,
+        "source": "polyhaven:red_brick",
+        "licence": "CC0",
+        "author": "Poly Haven contributors"
+      },
+      {
+        "mat": 4,
+        "id": "metal",
+        "scale": 2,
+        "source": "polyhaven:metal_plate",
+        "licence": "CC0",
+        "author": "Poly Haven contributors"
+      },
+      {
+        "mat": 5,
+        "id": "wood",
+        "scale": 2.2,
+        "source": "polyhaven:wood_planks",
+        "licence": "CC0",
+        "author": "Poly Haven contributors"
+      },
+      {
+        "mat": 6,
+        "id": "foliage",
+        "scale": 3,
+        "source": "polyhaven:leafy_grass",
+        "licence": "CC0",
+        "author": "Poly Haven contributors"
+      },
+      {
+        "mat": 7,
+        "id": "fabric",
+        "scale": 1.5,
+        "source": "polyhaven:denim_fabric",
+        "licence": "CC0",
+        "author": "Poly Haven contributors"
+      },
+      {
+        "mat": 8,
+        "id": "sand",
+        "scale": 6,
+        "source": "polyhaven:coast_sand_01",
+        "licence": "CC0",
+        "author": "Poly Haven contributors"
+      },
+      {
+        "mat": 9,
+        "id": "grass",
+        "scale": 3,
+        "source": "polyhaven:sparse_grass",
+        "licence": "CC0",
+        "author": "Poly Haven contributors"
+      },
+      {
+        "mat": 10,
+        "id": "rock",
+        "scale": 5,
+        "source": "polyhaven:rock_ground",
+        "licence": "CC0",
+        "author": "Poly Haven contributors"
+      },
+      {
+        "mat": 11,
+        "id": "snow",
+        "scale": 6,
+        "source": "polyhaven:snow_02",
+        "licence": "CC0",
+        "author": "Poly Haven contributors"
+      },
+      {
+        "mat": 12,
+        "id": "roof",
+        "scale": 2,
+        "source": "polyhaven:clay_roof_tiles",
+        "licence": "CC0",
+        "author": "Poly Haven contributors"
+      },
+      {
+        "mat": 13,
+        "id": "stone",
+        "scale": 3,
+        "source": "polyhaven:castle_brick_02_red",
+        "licence": "CC0",
+        "author": "Poly Haven contributors"
+      },
+      {
+        "mat": 14,
+        "id": "rust",
+        "scale": 2,
+        "source": "polyhaven:rusty_metal",
+        "licence": "CC0",
+        "author": "Poly Haven contributors"
+      },
+      {
+        "mat": 16,
+        "id": "asphalt",
+        "scale": 4,
+        "source": "polyhaven:asphalt_track",
+        "licence": "CC0",
+        "author": "Poly Haven contributors"
+      }
+    ],
+    "albedo": "mat-albedo-256.png",
+    "low": {
+      "size": 128,
+      "layers": [
+        {
+          "mat": 1,
+          "id": "concrete",
+          "scale": 4,
+          "source": "polyhaven:concrete_floor_02",
+          "licence": "CC0",
+          "author": "Poly Haven contributors"
+        },
+        {
+          "mat": 2,
+          "id": "brick",
+          "scale": 2.4,
+          "source": "polyhaven:red_brick",
+          "licence": "CC0",
+          "author": "Poly Haven contributors"
+        },
+        {
+          "mat": 4,
+          "id": "metal",
+          "scale": 2,
+          "source": "polyhaven:metal_plate",
+          "licence": "CC0",
+          "author": "Poly Haven contributors"
+        },
+        {
+          "mat": 5,
+          "id": "wood",
+          "scale": 2.2,
+          "source": "polyhaven:wood_planks",
+          "licence": "CC0",
+          "author": "Poly Haven contributors"
+        },
+        {
+          "mat": 6,
+          "id": "foliage",
+          "scale": 3,
+          "source": "polyhaven:leafy_grass",
+          "licence": "CC0",
+          "author": "Poly Haven contributors"
+        },
+        {
+          "mat": 7,
+          "id": "fabric",
+          "scale": 1.5,
+          "source": "polyhaven:denim_fabric",
+          "licence": "CC0",
+          "author": "Poly Haven contributors"
+        },
+        {
+          "mat": 8,
+          "id": "sand",
+          "scale": 6,
+          "source": "polyhaven:coast_sand_01",
+          "licence": "CC0",
+          "author": "Poly Haven contributors"
+        },
+        {
+          "mat": 9,
+          "id": "grass",
+          "scale": 3,
+          "source": "polyhaven:sparse_grass",
+          "licence": "CC0",
+          "author": "Poly Haven contributors"
+        },
+        {
+          "mat": 10,
+          "id": "rock",
+          "scale": 5,
+          "source": "polyhaven:rock_ground",
+          "licence": "CC0",
+          "author": "Poly Haven contributors"
+        },
+        {
+          "mat": 11,
+          "id": "snow",
+          "scale": 6,
+          "source": "polyhaven:snow_02",
+          "licence": "CC0",
+          "author": "Poly Haven contributors"
+        },
+        {
+          "mat": 12,
+          "id": "roof",
+          "scale": 2,
+          "source": "polyhaven:clay_roof_tiles",
+          "licence": "CC0",
+          "author": "Poly Haven contributors"
+        },
+        {
+          "mat": 13,
+          "id": "stone",
+          "scale": 3,
+          "source": "polyhaven:castle_brick_02_red",
+          "licence": "CC0",
+          "author": "Poly Haven contributors"
+        },
+        {
+          "mat": 14,
+          "id": "rust",
+          "scale": 2,
+          "source": "polyhaven:rusty_metal",
+          "licence": "CC0",
+          "author": "Poly Haven contributors"
+        },
+        {
+          "mat": 16,
+          "id": "asphalt",
+          "scale": 4,
+          "source": "polyhaven:asphalt_track",
+          "licence": "CC0",
+          "author": "Poly Haven contributors"
+        }
+      ],
+      "albedo": "mat-albedo-128.png",
+      "normal": "mat-normal-128.png"
+    },
+    "normal": "mat-normal-256.png"
+  },
+  "models": {},
+  "env": {},
+  "credits": [
+    {
+      "kind": "material",
+      "id": "concrete",
+      "author": "Poly Haven contributors",
+      "licence": "CC0",
+      "source": "polyhaven:concrete_floor_02"
+    },
+    {
+      "kind": "material",
+      "id": "brick",
+      "author": "Poly Haven contributors",
+      "licence": "CC0",
+      "source": "polyhaven:red_brick"
+    },
+    {
+      "kind": "material",
+      "id": "metal",
+      "author": "Poly Haven contributors",
+      "licence": "CC0",
+      "source": "polyhaven:metal_plate"
+    },
+    {
+      "kind": "material",
+      "id": "wood",
+      "author": "Poly Haven contributors",
+      "licence": "CC0",
+      "source": "polyhaven:wood_planks"
+    },
+    {
+      "kind": "material",
+      "id": "foliage",
+      "author": "Poly Haven contributors",
+      "licence": "CC0",
+      "source": "polyhaven:leafy_grass"
+    },
+    {
+      "kind": "material",
+      "id": "fabric",
+      "author": "Poly Haven contributors",
+      "licence": "CC0",
+      "source": "polyhaven:denim_fabric"
+    },
+    {
+      "kind": "material",
+      "id": "sand",
+      "author": "Poly Haven contributors",
+      "licence": "CC0",
+      "source": "polyhaven:coast_sand_01"
+    },
+    {
+      "kind": "material",
+      "id": "grass",
+      "author": "Poly Haven contributors",
+      "licence": "CC0",
+      "source": "polyhaven:sparse_grass"
+    },
+    {
+      "kind": "material",
+      "id": "rock",
+      "author": "Poly Haven contributors",
+      "licence": "CC0",
+      "source": "polyhaven:rock_ground"
+    },
+    {
+      "kind": "material",
+      "id": "snow",
+      "author": "Poly Haven contributors",
+      "licence": "CC0",
+      "source": "polyhaven:snow_02"
+    },
+    {
+      "kind": "material",
+      "id": "roof",
+      "author": "Poly Haven contributors",
+      "licence": "CC0",
+      "source": "polyhaven:clay_roof_tiles"
+    },
+    {
+      "kind": "material",
+      "id": "stone",
+      "author": "Poly Haven contributors",
+      "licence": "CC0",
+      "source": "polyhaven:castle_brick_02_red"
+    },
+    {
+      "kind": "material",
+      "id": "rust",
+      "author": "Poly Haven contributors",
+      "licence": "CC0",
+      "source": "polyhaven:rusty_metal"
+    },
+    {
+      "kind": "material",
+      "id": "asphalt",
+      "author": "Poly Haven contributors",
+      "licence": "CC0",
+      "source": "polyhaven:asphalt_track"
+    }
+  ]
+}

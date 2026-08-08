@@ -1,0 +1,18 @@
+/* tokens.css — design tokens only. Component styles live in game.css.
+   Dark night-city palette; system font stack (no webfonts shipped in v1). */
+:root {
+  --bg: #07070d;
+  --bg-raise: #10101c;
+  --ink: #e8e8f2;
+  --ink-dim: #9a9ab0;
+  --accent: #e0263c;      /* suit red */
+  --accent-2: #2b45c8;    /* suit blue */
+  --ok: #37d98a;
+  --warn: #ffb937;
+  --danger: #ff5252;
+  --line: #262638;
+  --radius: 10px;
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, Menlo, Consolas, monospace;
+  --shadow: 0 8px 32px rgba(0, 0, 0, 0.55);
+}

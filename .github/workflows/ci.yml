@@ -1,0 +1,53 @@
+# CI for Web-Slinger. Two jobs, split by cost (the f1-game pattern):
+#   guards — no browser, seconds: unit suites that read repo files as text.
+#   smoke  — one Chromium + SwiftShader boot test, serial (two concurrent
+#            SwiftShader contexts exceed per-test timeouts on shared runners).
+# workflow_call is included so a future pages.yml can gate deploy on this
+# workflow exactly once (its `uses:` reaches CI for the deploy branch, which
+# is why that branch would be ignored here).
+name: ci
+
+on:
+  push:
+  pull_request:
+  workflow_call:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  # Cancel superseded PR runs only. An unconditional true cancels queued pushes
+  # on the same ref and can wedge a needs:ci deploy chain (measured in f1-game:
+  # fifteen consecutive cancelled runs).
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  guards:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm ci
+      - run: npm run test:tooling-fast
+
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:smoke -- --timeout=240000
+        env:
+          SPIDEY_WORKERS: 1
+      - name: Upload failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-artifacts-${{ github.run_attempt }}
+          path: |
+            artifacts/test-results-*/
+            artifacts/report-*/
+          retention-days: 7
