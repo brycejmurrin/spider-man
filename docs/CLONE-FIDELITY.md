@@ -32,10 +32,21 @@ feature; the physics are not.** Every ranking below is weighted by that, and it
 is why the cheapest items on the list are also the highest-impact ones.
 
 The corollary is uncomfortable and worth stating: our traversal model is
-already close enough that retuning it is *not* where the remaining fidelity
-is. Measured in bare Node, midtown runs **3.56 km/min**, roughly twice the
-reference's community-measured pace — while the low-rise 60% of the map runs
-0.25 km/min. The problem is the distribution, not the constant.
+already close enough that retuning it is *not* where the remaining fidelity is.
+The problem is the **distribution**, not the constant.
+
+**CORRECTED — and the correction matters, because the first version of this
+paragraph quoted a number that was an artefact.** It said midtown runs
+3.56 km/min against the low-rise's 0.25. Those came from 60 s held swings, and
+over 60 s **16–35% of the trace leaves the 1.25 km footprint**, where there is
+no geometry and `ASSIST_Y` synthesises an unobstructed anchor every frame. The
+figure was largely measuring *how early the hero left the city*. Re-measured at
+15 s, where escape falls to 0–8%, the distance spread collapses to 0.98–1.16
+km/min — and the axis that survives is **attachment: 80% midtown, 57%
+commercial, 19% low-rise**. The low-rise hero is airborne 81% of the time,
+falling and being rescued rather than swinging. Target attachment and cadence;
+treat distance as a diagnostic only. (`docs/PLAN.md` §2 carries the full table
+and the collider bug that makes the anchor numbers a further 24–38% optimistic.)
 
 ---
 

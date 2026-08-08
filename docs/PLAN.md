@@ -75,9 +75,39 @@ different games depending on where you start:
 
 | district | share of buildings | attached | swings/min | distance |
 |---|---|---|---|---|
-| midtown (r<0.45) | 9% | 25% | 24 | **3.56 km/min** |
-| commercial | 31% | 57% | 34 | 2.43 km/min |
-| low-rise | **60%** | 89% | **137** | **0.25 km/min** |
+| midtown (r<0.45) | 9% | 25% | 24 | ~~3.56 km/min~~ |
+| commercial | 31% | 57% | 34 | ~~2.43 km/min~~ |
+| low-rise | **60%** | 89% | **137** | ~~0.25 km/min~~ |
+
+> **THE DISTANCE COLUMN IS AN ARTEFACT — do not tune against it.** Those runs
+> were 60 s held swings, and over 60 s **16–35% of the trace lies OUTSIDE the
+> 1.25 km footprint** (only 2–5 of 8 headings stay in). Outside it there is no
+> geometry, so `ASSIST_Y` synthesises an anchor every frame with nothing to
+> obstruct it — an unbounded ballistic corridor. The km/min figure was largely
+> measuring *how early the hero left the city*.
+>
+> Re-measured at **15 s** (escape falls to 0–8%), the distance spread collapses
+> and the real axis appears:
+>
+> | district | km/min @60 s | km/min @15 s | **attached @15 s** |
+> |---|---|---|---|
+> | midtown | 1.26 | 1.04 | **80%** |
+> | commercial | 1.63 | 1.16 | **57%** |
+> | low-rise | 1.07 | 0.98 | **19%** |
+>
+> **"Three different games" is real; its distance axis is not.** The sound axis
+> is **attachment** — 80 / 57 / 19%. The low-rise hero is airborne 81% of the
+> time: falling and being rescued by `ASSIST_Y`, not swinging. Target
+> attachment and cadence; treat distance as a diagnostic only.
+>
+> **And the anchor numbers above are measured against colliders that are
+> wrong.** `buildings.js:383-389` registers one OBB per building using the base
+> footprint for the full height: **128 of 983 buildings (13%) are registered
+> taller than they are** (`hall` +11.4 m mean, `drum` +23.4 m, max +50.2 m) and
+> **16.6% of registered collider volume is phantom**. Against corrected
+> section-per-OBB colliders, availability drops a further **24–38% relative**.
+> The desert is worse than this table says. Every "after" number must be
+> compared to a re-measured baseline, never to this one.
 
 Low-rise is a swing every 0.44 s at 13 m — hopping that covers no ground.
 Midtown is long ballistic arcs between rare anchors, and is roughly twice the
