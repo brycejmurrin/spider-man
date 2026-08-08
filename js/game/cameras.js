@@ -252,7 +252,7 @@ export function createCameras(colliders) {
         bank = (sub.v[0] * fz - sub.v[2] * fx) / Math.max(sub.speed, 1);   // free-fall slip
       }
       slipSm = damp(slipSm, Math.max(-1, Math.min(1, bank)), 10, dt);
-      const rollT = (sub.state === "swing" ? slipSm * 0.45 : slipSm * 0.05);
+      const rollT = (sub.state === "swing" ? slipSm * 0.35 : slipSm * 0.05);
       roll = damp(roll, rollT, 7, dt);
       // trauma shake — squared so grazes barely move and slams hit hard
       if (shake > 0) {

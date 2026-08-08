@@ -55,7 +55,12 @@ test("facade furniture is instanced, not baked per building", () => {
 });
 
 test("building heights span the district profiles, tall to low", () => {
-  const hs = city.colliders.list.map((b) => b.y1).sort((a, b) => a - b);
+  // Group by `bid`: colliders.list is one record per SECTION, not per building.
+  // Taking b.y1 straight off the list measures section tops, whose median is
+  // a podium rather than a roofline (18.9 m vs 22.4 m on seed 42).
+  const tops = new Map();
+  for (const b of city.colliders.list) tops.set(b.bid, Math.max(tops.get(b.bid) || 0, b.y1));
+  const hs = [...tops.values()].sort((a, b) => a - b);
   const p = (q) => hs[Math.floor(hs.length * q)];
   assert.ok(p(0.5) > 12 && p(0.5) < 60, `median height ${p(0.5)} m is off`);
   assert.ok(p(0.9) > 40, `p90 height ${p(0.9)} m — no tall stock to swing between`);
@@ -80,6 +85,12 @@ test("districts are radial: the core is taller than the rim", () => {
 test("no building footprint overlaps a street", () => {
   // Streets are reserved by construction (lots live inside the block minus the
   // sidewalk), so a building on the asphalt means the lot maths drifted.
+  //
+  // This got much stronger when colliders became one record per SECTION. It
+  // used to see only the base footprint, so an offset upper mass could stand
+  // in the street unseen — and two did: `arch` legs 10.4 m out and `notch`
+  // towers 8.4 m out, both because they were narrowed on one axis and
+  // displaced along the other at full depth. Both fixed in buildings.js.
   const half = CITY.BLOCK / 2 - CITY.SIDEWALK;
   const N = CITY.BLOCKS, H = N * CITY.PITCH / 2;
   for (const b of city.colliders.list) {

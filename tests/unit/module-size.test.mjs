@@ -28,7 +28,12 @@ const CEILINGS = {
   "js/game.js": 460,
   // The ported massing library. Cohesive (one switch over ~18 silhouettes), so
   // this is a drift alarm rather than an extraction target.
-  "js/city/buildings.js": 420,
+  // 420 -> 432: per-SECTION collider registration. The whole-building record
+  // it replaces was 8 lines and wrong (base footprint for the full height);
+  // sec()'s own register plus secRound() for the three round kinds that never
+  // call sec() is 9 lines net. Raised deliberately, for code rather than
+  // comments — this is the case the ratchet's failure message describes.
+  "js/city/buildings.js": 432,
   "js/game/hero.js": 380,   // +80: anchor scoring, release curve, stall guard,
                             // constraint energy fix — each with its rationale
   // +20, deliberately: pose smoothing (nine damped scalars, so a state change

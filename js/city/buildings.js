@@ -30,6 +30,10 @@ const vadd = (a, v, k) => [a[0] + v[0] * k, a[1] + v[1] * k, a[2] + v[2] * k];
 
 export function createBuildings(ctx) {
   const { out, glassBuf, graph, night: NIGHT, hash, register } = ctx;
+  // Every collider record is one SECTION of a mass, not one building, so a
+  // consumer that genuinely means "per building" (height distributions, the
+  // building count) groups by this rather than counting records.
+  let nextBid = 0;
   const lod = ctx.lod || ((n) => n);
   // graph.instance wrapper: default buffer `out`, RAW emitters (no guards).
   const inst = (key, place, build, meta, buf) =>
@@ -172,7 +176,7 @@ export function createBuildings(ctx) {
 
   /* tower(): the massing-silhouette switch (Apex 26's neonTower). lot gives
      the anchor + basis; kind picks the form. */
-  const tower = (lot, kind, neon, tone, neonAmt, seed) => {
+  const tower = (lot, kind, neon, tone, neonAmt, seed, bid) => {
     const { c, r, u, t, w, h, d } = lot;
     const a = { c }, b = [r, u, t];
     const reach = Math.max(w, d);
@@ -191,8 +195,20 @@ export function createBuildings(ctx) {
       : (bodyCol[0] > 0.5 && bodyCol[0] > bodyCol[2] + 0.03) ? MAT.BRICK : MAT.CONCRETE;
     // One stacked section centred at up=yb+sh/2; to/ro shift along t/r so twin
     // and notch members never share a face plane (the zero-gap fix).
+    // yaw of the r axis in world XZ (colliders rotate into lot space with it)
+    const yawR = Math.atan2(r[2], r[0]);
     const sec = (yb, sw, sh, sd, sseed, to, ro) => {
       const cen = vadd(vadd(vadd(a.c, u, yb + sh / 2), t, to || 0), r, ro || 0);
+      // Register the SECTION, not the building — see CLAUDE.md. The single
+      // whole-building OBB this replaced used the base footprint for the full
+      // height: 13% of buildings reported roofs that are not there (`hall`
+      // +11.4 m mean, `drum` +23.4 m, worst +50.2 m) and 16.6% of registered
+      // volume was phantom. `pickAnchor` raycasts these boxes, so it is an
+      // anchor bug as much as a collision one.
+      if (register) register({
+        cx: cen[0], cz: cen[2], y0: cen[1] - sh / 2, y1: cen[1] + sh / 2,
+        hw: sw / 2, hd: sd / 2, rot: yawR, kind, bid,
+      });
       out._mat = bmat;
       inst(UNIT_BOX, { o: cen, r, u, t, s: [sw, sh, sd], col: bodyCol },
         unitBox, { kind: "buildingMass" });
@@ -200,6 +216,15 @@ export function createBuildings(ctx) {
       if (NIGHT) neonFacade(cen, b, sw, sh, sd, neon, sseed, na);
       else dayGridAt(cen, b, sw, sh, sd, bodyCol);
       return true;
+    };
+    // cylinder/spire/drum never call sec(), so without this they become anchor
+    // and collision HOLES. Their bounding box over-reports a round corner,
+    // which is what the collider format is, and is far better than a hole.
+    const secRound = (yb, R, sh) => {
+      if (register) register({
+        cx: a.c[0], cz: a.c[2], y0: a.c[1] + yb, y1: a.c[1] + yb + sh,
+        hw: R, hd: R, rot: yawR, kind, bid,
+      });
     };
     out._mat = MAT.METAL;   // caps / antennas / trim default
     if (kind === "tiered") {
@@ -228,6 +253,7 @@ export function createBuildings(ctx) {
       Geom.addBox(out, vadd(a.c, u, h + 0.5), [w * 0.5, 1.0, d * 0.5], cap, b);
     } else if (kind === "cylinder") {
       const R = reach * 0.5, segs = 14;
+      secRound(0, R, h);
       Geom.addCyl(out, a.c, R, h, bodyCol, segs, b);
       const rings = Math.max(3, Math.min(14, Math.round(h / 6)));
       for (let ri = 1; ri < rings; ri++) {
@@ -238,6 +264,7 @@ export function createBuildings(ctx) {
       Geom.addCyl(out, vadd(a.c, u, h), R * 0.6, 1.4, cap, segs, b);
     } else if (kind === "spire") {
       const bh = h * 0.74, R = reach * 0.5;
+      secRound(0, R * 0.71, bh);   // mean radius of the taper; the mast above is not a mass
       Geom.addFrustum(out, a.c, R, R * 0.42, bh, bodyCol, 8, b);
       const rings = Math.max(3, Math.round(bh / 7));
       for (let ri = 1; ri < rings; ri++) {
@@ -271,9 +298,12 @@ export function createBuildings(ctx) {
       Geom.addPrism(out, vadd(a.c, u, bh), [w, h * 0.18, d], cap, b);
       if (neonOn) Geom.addBox(out, vadd(a.c, u, bh + h * 0.18), [w * 1.02, 0.5, d * 1.02], neon, b);
     } else if (kind === "notch") {
-      const podH = h * 0.22, off = w * 0.30;
+      // Same defect as `arch`, same fix: narrow and displace on the SAME axis.
+      // The two towers were narrowed along r (w*0.42) and displaced along t at
+      // full depth d, so each sat 8.4 m outside the lot.
+      const podH = h * 0.22, off = d * 0.28;
       sec(0, w, podH, d, seed);
-      for (const o2 of [-off, off]) sec(podH, w * 0.42, h - podH, d, seed + o2, o2, o2 > 0 ? 0.07 : 0);
+      for (const o2 of [-off, off]) sec(podH, w, h - podH, d * 0.42, seed + o2, o2, o2 > 0 ? 0.07 : 0);
       Geom.addBox(out, vadd(a.c, u, h + 0.5), [w * 0.92, 1.0, d * 0.9], cap, b);
     } else if (kind === "fin") {
       sec(0, w, h, d, seed);
@@ -301,8 +331,14 @@ export function createBuildings(ctx) {
       else dayGridAt(cen2, b, w * 0.5, h, d, bodyCol);
       Geom.addBox(out, vadd(a.c, u, h + 0.5), [w * 0.6, 1.0, d * 0.6], cap, b);
     } else if (kind === "arch") {
-      const legW = w * 0.26, gp = w * 0.46, legH = h * 0.78, off = gp / 2 + legW / 2;
-      for (const o3 of [-off, off]) sec(0, legW, legH, d, seed + o3 * 7, o3, o3 > 0 ? 0.07 : 0);
+      // The legs are narrowed and displaced on the SAME axis (t), as `twin`
+      // does. They used to be narrowed along r (legW) while displaced along t
+      // at full depth d, so each leg was a full-depth slab shoved sideways:
+      // extent d/2 + w*0.36, i.e. 10.4 m outside its own lot and standing in
+      // the street. Registering one OBB per building hid it, because that box
+      // was the base footprint and never saw the offset.
+      const legD = d * 0.26, gp = d * 0.46, legH = h * 0.78, off = gp / 2 + legD / 2;
+      for (const o3 of [-off, off]) sec(0, w, legH, legD, seed + o3 * 7, o3, o3 > 0 ? 0.07 : 0);
       sec(legH, w, h - legH, d, seed + 5.9);
       Geom.addBox(out, vadd(a.c, u, h + 0.5), [w * 0.96, 1.0, d * 0.9], cap, b);
     } else if (kind === "ziggurat") {
@@ -311,6 +347,7 @@ export function createBuildings(ctx) {
       Geom.addBox(out, vadd(a.c, u, h + 0.4), [tw, 0.8, td], cap, b);
     } else if (kind === "drum") {
       const R = reach * 0.6, dh = h * 0.5;
+      secRound(0, R, dh + 1.8);    // body + the two cap discs; NOT h — this kind
       Geom.addCyl(out, a.c, R, dh, bodyCol, 18, b);
       const ring = NIGHT ? (neonOn ? neon : warm) : [0.30, 0.34, 0.42];
       Geom.addCyl(out, vadd(a.c, u, dh * 0.5), R * 1.02, dh * 0.16, ring, 18, b);
@@ -319,11 +356,14 @@ export function createBuildings(ctx) {
     } else if (kind === "hall") {
       const hh = h * 0.5;
       sec(0, w, hh * 0.7, d, seed);
+      secRound(hh * 0.7, Math.max(w, d) / 2, hh * 0.3);   // the prism roof is real mass
       Geom.addPrism(out, vadd(a.c, u, hh * 0.7), [w, hh * 0.3, d], cap, b);
       if (neonOn) Geom.addBox(out, vadd(a.c, u, hh * 0.7), [w * 1.02, 0.4, d * 1.02], neon, b);
     } else { // setback
       const setH = h * 0.84;
       sec(0, w, setH, d, seed);
+      if (register) register({ cx: a.c[0], cz: a.c[2], y0: a.c[1] + setH, y1: a.c[1] + h,
+        hw: w * 0.36, hd: d * 0.36, rot: yawR, kind, bid });
       out._mat = bmat;
       Geom.addBox(out, vadd(a.c, u, setH + (h - setH) / 2), [w * 0.72, h - setH, d * 0.72], bodyCol, b);
       out._mat = MAT.METAL;
@@ -362,7 +402,7 @@ export function createBuildings(ctx) {
     Geom.addBox(out, vadd(c, u, plH / 2), [w + 2 * plOut, plH, d + 2 * pdOut], plinth, [r, u, t]);
     out._mat = 0;
 
-    tower(lot, useKind, neon, tone, neonAmt, seed);
+    tower(lot, useKind, neon, tone, neonAmt, seed, nextBid++);
 
     // Night signage: an HDR neon band wrapping the crown of some lit towers,
     // plus a red aircraft beacon (with its mast) on tall ones.
@@ -379,14 +419,9 @@ export function createBuildings(ctx) {
       }
     }
 
-    // The gameplay record: footprint OBB + roof for colliders/anchors/landing.
-    if (register) register({
-      cx: c[0], cz: c[2], y0: c[1], y1: c[1] + h,
-      hw: w / 2, hd: d / 2,
-      // yaw of the r axis in world XZ (colliders rotate into lot space with it)
-      rot: Math.atan2(r[2], r[0]),
-      kind: useKind,
-    });
+    // The gameplay record is now emitted PER SECTION, by sec()/secRound()
+    // above. See the note there: one box per building used the base footprint
+    // for the full height and put phantom roofs over 13% of the city.
   };
 
   return { building, neonFacade };
