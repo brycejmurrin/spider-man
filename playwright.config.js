@@ -12,15 +12,42 @@ const SUF = `-${PORT}`;
 // Portable chromium resolution: prefer PW_CHROMIUM, else the Linux sandbox path
 // only if it actually exists on disk, else omit executablePath so Playwright
 // falls back to its own bundled browser (macOS/other dev machines).
+// SPIDEY_NO_EXE=1 drops executablePath entirely, which is how CI resolves the
+// browser. It exists so the CI path can be exercised on a machine that has the
+// sandbox browser on disk — without it, the difference below is untestable
+// locally and CI is the only place it shows up.
 const SANDBOX_CHROMIUM = "/opt/pw-browsers/chromium-1194/chrome-linux/chrome";
-const CHROMIUM_PATH =
+const CHROMIUM_PATH = process.env.SPIDEY_NO_EXE === "1" ? undefined : (
   process.env.PW_CHROMIUM ||
-  (fs.existsSync(SANDBOX_CHROMIUM) ? SANDBOX_CHROMIUM : undefined);
+  (fs.existsSync(SANDBOX_CHROMIUM) ? SANDBOX_CHROMIUM : undefined));
 
 // Shared Chromium launch (SwiftShader software-GL). Both projects use it — the
 // "headless"/"render" split is about worker concurrency, not GL capability.
 const LAUNCH = {
   ...(CHROMIUM_PATH ? { executablePath: CHROMIUM_PATH } : {}),
+  // channel:"chromium" is LOAD-BEARING, and only on machines with no
+  // executablePath — which means CI, and only CI.
+  //
+  // Playwright's getExecutableName() returns 'chromium-headless-shell' for a
+  // headless launch unless a channel names a chromium alias, in which case it
+  // returns the full 'chromium'. So local runs (executablePath pinned to the
+  // sandbox browser) have always used the full browser, and CI has always used
+  // the headless shell. They were never running the same binary.
+  //
+  // The shell WEDGES. Reproduced here by pointing PW_CHROMIUM at it: the first
+  // test in each worker passes in 7-9 s (about five times faster than the full
+  // browser), and the SECOND test in the same worker hangs creating its browser
+  // context until the test budget expires, dying with
+  //
+  //     Test timeout of 120000ms exceeded while setting up "context".
+  //
+  // which is verbatim what CI reported at 240000ms, with the same shape: four
+  // of five tests dead in context setup, each passing on a fresh worker.
+  //
+  // Do not "simplify" this away. The 5x speed of the shell is real and worth
+  // chasing separately — a flag may exist that makes its second context work —
+  // but until then, correctness wins.
+  channel: "chromium",
   args: [
     "--use-angle=swiftshader",
     "--enable-unsafe-webgpu",
