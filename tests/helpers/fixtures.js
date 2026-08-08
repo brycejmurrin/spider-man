@@ -33,16 +33,29 @@ const LOG_SPEC = process.env.SPIDEY_LOG || "";
 
 /* SPIDEY_NO_SW=1 stops the page registering its service worker.
  *
- * The worker is not under test anywhere, and it is not free: every fresh
- * context installs a new one, which fetches index.html, parses its tags and
- * re-requests ~35 assets with cache:"no-store" against the single-threaded
- * static server, on top of the page's own ~30 module fetches.
+ * KEPT FOR THE NEGATIVE RESULT. The worker looked like the obvious cause of
+ * the context-setup stalls — every fresh context installs a new one, which
+ * fetches index.html, parses its tags and re-requests ~35 assets with
+ * cache:"no-store" against the single-threaded static server, on top of the
+ * page's own ~30 module fetches. On GitHub's runners four of five smoke tests
+ * died at exactly 240 s "while setting up context" and then passed on a fresh
+ * worker.
  *
- * That is the leading suspect for the context-setup stalls: on GitHub's
- * runners four of five smoke tests died at exactly 240 s "while setting up
- * context" and then passed on a fresh worker, and locally a trivial assertion
- * ("the dev API reports a built city", normally 8 s) was measured at 149.2 s.
- * This flag exists so that hypothesis can be A/B'd instead of argued about.
+ * It is not the cause. Measured here, smoke at 2 workers, one variable:
+ *
+ *     SPIDEY_NO_SW=1   240.7 s   (45.0 / 47.1 / 39.4 / 42.7 / 66.5)
+ *     default           226.4 s   (43.7 / 44.4 / 39.3 / 39.0 / 60.0)
+ *
+ * Stubbing it is 6% SLOWER, i.e. noise, and neither arm produced a single
+ * outlier. An earlier 149.2 s reading on an 8 s assertion — the thing that
+ * prompted this — was contention from other work on a 4-core box, not a wedge.
+ *
+ * The live hypothesis is the browser BINARY: CI sets no executablePath, so
+ * Playwright's getExecutableName() returns chromium-headless-shell, while
+ * playwright.config.js pins the full Chromium locally whenever
+ * /opt/pw-browsers exists. CI and local have never run the same browser.
+ * Test that with PW_CHROMIUM pointed at the headless shell before touching
+ * this flag again.
  */
 const NO_SW = process.env.SPIDEY_NO_SW === "1";
 
