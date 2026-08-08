@@ -77,6 +77,11 @@ const HEADLESS_SAFE = [
   "js/city/geom.js", "js/city/graph.js", "js/city/city-data.js",
   "js/city/buildings.js", "js/city/colliders.js", "js/city/citygen.js",
   "js/game/hero-consts.js", "js/game/hero.js", "js/hero/hero3d.js",
+  // cameras.js imports nothing and vantage() is pure over a colliders object,
+  // so the geometry clamp is testable in bare Node — which turned a 4-minute
+  // SwiftShader spec into a 1-second one (tests/unit/camera-los.test.mjs).
+  // Listing it here is what stops a future DOM import quietly taking that away.
+  "js/game/cameras.js",
 ];
 
 module.exports = { ENTRY, MODULES, CSS, PATHS, HEADLESS_SAFE };

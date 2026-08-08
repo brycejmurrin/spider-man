@@ -17,15 +17,59 @@ export const CAM_MODES = [
 
 const damp = (c, t, l, dt) => c + (t - c) * (1 - Math.exp(-l * dt));
 
+/* Geometry-clamp constants. PAD is how far short of a surface the eye stops;
+   MIN_D is the framing distance we'd LIKE to keep; HARD_D is the floor we'll
+   accept when a facade is closer than that.
+
+   MIN_D is a PREFERENCE, never a floor that outranks the wall. The first
+   version wrote `Math.max(MIN_D, hit.t - PAD)`, which places the eye at 2.8 m
+   whenever the blocker is nearer than 4.2 m — i.e. THROUGH it. Measured by
+   tests/unit/camera-los.test.mjs on seed 42: 43 of 200 solved canyon frames
+   sat inside a facade, every single one of them at eyeDist 2.80 against a hit
+   at t 1.98. A clamp that can push the eye past the surface it is clamping to
+   is not a clamp. */
+const PAD = 1.4, MIN_D = 2.8, HARD_D = 0.9;
+
+/* The candidate ladder: [backMul, upMul, sideSign]. Tried in order, first
+   fully-clear one wins, otherwise the roomiest. Nominal framing first, then
+   the mirrored shoulder, then over the roofline, then near-overhead — which in
+   a 24 m street canyon is the placement that is essentially always clear.
+   Four raycasts a frame against a spatial hash costs nothing measurable. */
+const CANDS = [[1, 1, 1], [1, 1, -1], [0.7, 2.0, 1], [0.35, 3.2, 0]];
+
 export function createCameras(colliders) {
   const eye = [0, 40, -60], tgt = [0, 20, 0];
   let fov = 62, roll = 0, shake = 0, slipSm = 0;
   let orbitYaw = 0, orbitPitch = 0;    // player-drag offsets on the chase rig
   let modeIdx = 0;
 
+  /* solveEye(subject chest, desired eye, out) -> room
+     Place one candidate eye and report how far the line to the subject stays
+     clear. `room` >= the candidate's own distance means fully unobstructed.
+
+     The ground/roof lift happens HERE, BEFORE the ray, and that ordering is
+     load-bearing: lifting the eye after the ray moves it off the very line
+     that was just cleared, so it can re-enter the building it was pulled out
+     of — the second half of the canyon bug. */
+  function solveEye(sx, sy, sz, ex, ey, ez, out) {
+    const gy = colliders.groundY(ex, ez, ey + 1);
+    if (ey < gy + 0.8) ey = gy + 0.8;
+    const dx = ex - sx, dy = ey - sy, dz = ez - sz;
+    const dl = Math.hypot(dx, dy, dz) || 1;
+    const hit = colliders.raycast([sx, sy, sz], [dx / dl, dy / dl, dz / dl], dl);
+    const room = hit ? hit.t - PAD : dl;
+    // Absolute ceiling: stay short of the surface no matter what MIN_D/HARD_D
+    // would prefer. This is the line the old clamp did not have.
+    const limit = hit ? Math.max(0.2, hit.t - 0.25) : dl;
+    const want = Math.min(dl, limit, Math.max(HARD_D, room));
+    const k = want / dl;
+    out[0] = sx + dx * k; out[1] = sy + dy * k; out[2] = sz + dz * k;
+    return room;
+  }
+
   /* vantage(subject) -> {eye, tgt, fov} — pure, no damping.
      subject: { p:[3], v:[3], head, speed, state } */
-  const _e = [0, 0, 0], _t = [0, 0, 0];
+  const _e = [0, 0, 0], _t = [0, 0, 0], _c = [0, 0, 0];
   function vantage(sub, mode) {
     const spN = Math.min(1, sub.speed / 40);
     const hx = Math.sin(sub.head + orbitYaw), hz = Math.cos(sub.head + orbitYaw);
@@ -35,39 +79,48 @@ export function createCameras(colliders) {
     else if (mode === "heli") { back = 26; up = 30; lead = 4; f = 52; }
     else { back = 6.4; up = 2.3; lead = 6; f = 58 + 10 * spN; }
     up += orbitPitch * back;
-    // 3/4 side offset (the CHASE_SIDE_FRAC look)
-    const rx = hz, rz = -hx, side = back * 0.22;
-    _e[0] = sub.p[0] - hx * back + rx * side;
-    _e[1] = sub.p[1] + 1.5 + up;
-    _e[2] = sub.p[2] - hz * back + rz * side;
     _t[0] = sub.p[0] + hx * lead;
     _t[1] = sub.p[1] + 1.4 + (mode === "heli" ? 0 : 0.6) + orbitPitch * -6;
     _t[2] = sub.p[2] + hz * lead;
-    // Geometry clamp — solve freely, then pull the eye out of buildings.
-    // The ray starts at the SUBJECT, not at the look-at target: the target
-    // leads the hero by 6-8 m, so a ray cast from it can start on the far
-    // side of the very wall the hero is swinging past, and the clamp then
-    // "protects" a point the player is not looking at while the eye sits
-    // inside a facade. What must stay unobstructed is the line to the hero.
+
+    // Geometry clamp. The ray starts at the SUBJECT, not at the look-at
+    // target: the target leads the hero by 6-8 m, so a ray cast from it can
+    // start on the far side of the very wall the hero is swinging past, and
+    // the clamp then "protects" a point the player is not looking at while
+    // the eye sits inside a facade. What must stay unobstructed is the line
+    // to the hero.
+    //
+    // Shortening along ONE direction cannot always succeed — in a canyon the
+    // wall is sometimes closer than any watchable framing distance. So try a
+    // few placements and take the first that is genuinely clear, rather than
+    // forcing the nominal one and hoping.
     const sx = sub.p[0], sy = sub.p[1] + 1.4, sz = sub.p[2];
-    const dx = _e[0] - sx, dy = _e[1] - sy, dz = _e[2] - sz;
-    const dl = Math.hypot(dx, dy, dz) || 1;
-    const hit = colliders.raycast([sx, sy, sz], [dx / dl, dy / dl, dz / dl], dl);
-    if (hit) {
-      // Stop the eye PAD metres short of the surface, and never closer than
-      // MIN_D to the subject. A bare ray hit with a small floor lets the eye
-      // sit right against a facade: the near plane then clips into it and the
-      // frame fills with one lit pane instead of the hero.
-      const PAD = 1.4, MIN_D = 2.8;
-      const want = Math.max(MIN_D, hit.t - PAD);
-      if (want < dl) {
-        const k = want / dl;
-        _e[0] = sx + dx * k; _e[1] = sy + dy * k; _e[2] = sz + dz * k;
+    const rx = hz, rz = -hx;                      // 3/4 side offset (CHASE_SIDE_FRAC)
+    let bestScore = -Infinity;
+    for (let i = 0; i < CANDS.length; i++) {
+      const c = CANDS[i];
+      const b = back * c[0], u = up * c[1], side = back * 0.22 * c[2];
+      const ex = sub.p[0] - hx * b + rx * side;
+      const ey = sub.p[1] + 1.5 + u;
+      const ez = sub.p[2] - hz * b + rz * side;
+      const room = solveEye(sx, sy, sz, ex, ey, ez, _c);
+      const dl = Math.hypot(ex - sx, ey - sy, ez - sz) || 1;
+      // Prefer a clear line; among blocked ones prefer the roomiest. Cap the
+      // score at MIN_D so a distant HELI shot does not always beat a perfectly
+      // good CHASE shot just for being further away.
+      const score = Math.min(room, MIN_D);
+      if (score > bestScore) {
+        bestScore = score;
+        _e[0] = _c[0]; _e[1] = _c[1]; _e[2] = _c[2];
       }
+      if (room >= dl) break;                      // fully unobstructed — done
     }
-    // never below street + MIN_CLEAR
-    const gy = colliders.groundY(_e[0], _e[2], _e[1] + 1);
-    if (_e[1] < gy + 0.8) _e[1] = gy + 0.8;
+    // Last resort: if the eye still ended up inside a box (a corner case the
+    // single centre ray cannot see), push it out along the shallowest face.
+    const clip = colliders.sphereClip(_e, 0.5);
+    if (clip) {
+      _e[0] += clip.nx * clip.depth; _e[1] += clip.ny * clip.depth; _e[2] += clip.nz * clip.depth;
+    }
     return { eye: _e, tgt: _t, fov: f };
   }
 
