@@ -19,6 +19,15 @@ Ten segments (the file header comment says "Nine segments" — stale). Every seg
 `Geom.addBox` calls only. Counting boxes: torso 4 (chest / abdomen / pelvis / emblem), head 3
 (mask + 2 lenses), each upper arm 1, each forearm 2 (forearm + hand), each thigh 1, each shin 2
 (shin + boot) = **21 boxes = 126 quads = 504 vertices, 252 triangles** for the whole character.
+
+> **CORRECTED, and every "252 triangles" below inherits the error.** Running the
+> real builder in bare Node reports **19 boxes, 456 vertices, 228 triangles,
+> 17,784 bytes** — the count above double-counts the single-box upper arms and
+> thighs. The direction of the argument survives (the hero is 0.009% of the
+> heap, so the polygon budget is not the binding constraint), but the figures
+> are wrong. See [`HERO-MODEL-PLAN.md`](HERO-MODEL-PLAN.md), which supersedes
+> the ranked plan here and records that P2, P3, P5 and P6 have since landed
+> while P1 has not.
 There is no cylinder, no cone, no sphere anywhere in the hero, although `Geom` exports
 `addCyl`, `addCone`, `addFrustum`, `addPyramid`, `addPrism` and `addMesh`.
 
