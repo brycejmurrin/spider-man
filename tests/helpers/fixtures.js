@@ -31,11 +31,29 @@ import { test as base, expect } from "@playwright/test";
 // specs navigate to "/" themselves and would drop a query string.
 const LOG_SPEC = process.env.SPIDEY_LOG || "";
 
+/* SPIDEY_NO_SW=1 stops the page registering its service worker.
+ *
+ * The worker is not under test anywhere, and it is not free: every fresh
+ * context installs a new one, which fetches index.html, parses its tags and
+ * re-requests ~35 assets with cache:"no-store" against the single-threaded
+ * static server, on top of the page's own ~30 module fetches.
+ *
+ * That is the leading suspect for the context-setup stalls: on GitHub's
+ * runners four of five smoke tests died at exactly 240 s "while setting up
+ * context" and then passed on a fresh worker, and locally a trivial assertion
+ * ("the dev API reports a built city", normally 8 s) was measured at 149.2 s.
+ * This flag exists so that hypothesis can be A/B'd instead of argued about.
+ */
+const NO_SW = process.env.SPIDEY_NO_SW === "1";
+
 async function installInit(context) {
-  await context.addInitScript((spec) => {
+  await context.addInitScript(({ spec, noSw }) => {
     window.__TEST_MODE = true;
     if (spec) { try { localStorage.setItem("spidey.logLevel", spec); } catch (_) {} }
-  }, LOG_SPEC);
+    if (noSw && navigator.serviceWorker) {
+      try { navigator.serviceWorker.register = () => Promise.resolve(undefined); } catch (_) {}
+    }
+  }, { spec: LOG_SPEC, noSw: NO_SW });
 }
 
 // Console lines captured per test, keyed by the page they came from.
