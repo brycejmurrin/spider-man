@@ -283,15 +283,54 @@ thing keeping the low-rise majority playable.
 
 ## 9. Missions and content
 
-**Not yet researched.** The game has no mission content at all: no objectives,
-no activities, no progression, no reason to swing anywhere in particular. A
-research pass on the reference games' activity taxonomy, spawn/pacing systems,
-token economy, skill trees and what a one-developer procedural clone can
-actually reproduce is in flight; this section will be written from it rather
-than guessed at.
+Full research in [`research/MISSIONS.md`](research/MISSIONS.md). The four
+findings that change what we should build:
 
-What is already known and constrains it: everything must be **deterministic per
-seed** (no `Math.random` reachable from `buildCity()` or `hero.step()`), and the
-city is generated rather than authored — so activity placement is a generator
-concern, and anything requiring hand-placed geometry is in §3's "cannot be
-fixed" column.
+**1. The reference's own content is 46% one repeated combat encounter.** 358
+required activity instances for 100%, of which **165 are crimes** — and the
+crime system is the game's most-criticised feature at volume. With no combat
+budget we cannot copy that, and the research says we should not want to.
+
+**2. Its most transferable content is the part nobody talks about.** The 17
+Research Stations are ~5-minute missions the wiki describes as *"often based on
+traversal mechanics"*, and **roughly 12 of the 17 need nothing but the hero, the
+collider set and a timer**: free-fall 250 m before your first attach; cross the
+city without swinging at all; 20 targets in 20 seconds with each hit adding
+time; align 8 towers in sequence against a rolling clock. That is a complete
+catalogue of combat-free traversal challenges, already play-tested by a AAA
+studio, and it maps onto what we have today.
+
+**3. Their crime *locations* were procedural markup all along.** The GDC 2019
+slides list **">3000 crimes"** against 165 required — Insomniac generated and
+validated crime *slots* with the same pipeline that made the streets. **[DEV]**
+The encounter is content; the encounter's location is markup. That is precisely
+the shape a procedural clone can copy, and it means our generator is doing the
+same job theirs did rather than a lesser one.
+
+**4. Determinism buys us something Insomniac could not have.** A generated time
+trial normally loses to an authored one because it has no credible ceiling — no
+evidence a better line exists. But our hero is deterministic and driveable
+headless through `__spidey.act()`, so we can **run a scripted policy through
+every generated course at build time and compute the author medal**. A studio
+with a nondeterministic physics step cannot do that. It is the single feature
+that makes a procedural time trial as good as an authored one.
+
+**The build order**, from the per-activity verdict table: chase target → timed
+chained-target run → dive/restricted-move tests → *(playtest — that is already a
+real game)* → races + ghosts + generated medals → landmarks → district meter →
+perch surfacing → collectibles. Items 1-8 cover 12 of the reference's 17
+research stations, both chase collectibles, its landmark photo system, its
+collectible system, its scored-challenge format and its district meta — with no
+combat, no AI, no art and no writing.
+
+**Three things the generator must start persisting**, in payoff order: a **roof
+adjacency graph**, a **per-building distinctiveness score**, and **ledge/setback
+surfaces**. Everything else in tier (a) is already queryable.
+
+**And one trap worth naming**, because it is cheap to build and therefore
+tempting: **surveillance towers and fog-of-war**. Insomniac deleted them
+entirely in 2023. Their stated 2023 win condition was *"a player never opened
+their map — they just went to the top of a tall point and looked out"* **[DEV]**,
+which for a city with no landmark art is a design brief: **the world must be
+legible from a rooftop.** That is what makes §6's landmark work matter beyond
+decoration.

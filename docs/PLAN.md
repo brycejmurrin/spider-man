@@ -201,16 +201,43 @@ one whose collection *was just more swinging*.
 
 - **3-4 districts** with distinct height profiles, so the swing rhythm changes:
   short tethers and fast cadence in the low-rise, dive slingshots among towers.
-- **One collectible type**, ~10 per district, each placed where reaching it
-  *requires* a traversal move. Reward: skill points, nothing else.
-- **Crime events**: one within 300 m every 45-75 s, three flavours, 30-45 s
-  each. Never a six-wave slog.
+- **One collectible type**, ~10 per district. ~~Each placed where reaching it
+  *requires* a traversal move.~~ **CORRECTED** — the sourced evidence is that
+  the beloved collectible was beloved for being *easy* (IGN: "the activity
+  itself was pretty easy"). **Split the verb**: collectibles are the pleasant
+  detour, easy and everywhere; the skill gate goes in a *separate*, optional
+  activity type that pays medals. Do not make one thing be both.
+- ~~**Crime events**: one within 300 m every 45-75 s, three flavours.~~
+  **DEMOTED.** The cadence is roughly right for the reference's early game
+  (measured 20-30 s), but its crime system is **its single most-criticised
+  feature at volume** — 165 required completions, 46% of all required activity
+  instances. With no combat we have no crime verb worth repeating. Chase
+  targets, timed target runs and dive tests all rank above it: cheaper, more
+  on-thesis, and proven in the same game. The one viable non-combat crime verb
+  is a **falling-person intercept**.
 - **District completion** unlocks the next spawn point. Skip the tower-climb
   trope; it was the most-criticised structure and it does not earn its cost.
+  (Confirmed: Insomniac **deleted surveillance towers entirely** in 2023.)
 - **Traversal time trials** — nearly free, since the hero is already
-  deterministic and seed-reproducible.
+  deterministic and seed-reproducible. **Understated.** Determinism buys
+  something Insomniac could not have: **generated par times and a computable
+  author medal**, by running a scripted policy through each course at build
+  time. That is the mechanism that makes a *procedural* time trial as good as
+  an *authored* one, and it is why time trials rank near the top rather than
+  the bottom. Pay in medals and cosmetics, **never in movement** — Just Cause 3
+  gates traversal mods behind its wingsuit challenges and the consistent
+  verdict is grind.
 - **Skill trees hold amplifiers, never the moves that make the system fun.**
-  Throws, swing kick, air launcher and quick recovery ship unlocked.
+  **Confirmed against the reference**: only **five of its 34 skills** touch
+  traversal, all cost one point, and the two most movement-changing (Quick Zip,
+  Point Launch Boost) are bought in the first hour or two. ~90% of its
+  traversal is unlocked at minute zero.
+
+The full activity taxonomy, the surfacing research, the token economy and the
+per-activity "seedable free / needs new generator data / skip" verdict are in
+[`research/MISSIONS.md`](research/MISSIONS.md). The three things the generator
+should start persisting, in payoff order: a **roof adjacency graph**, a
+**per-building distinctiveness score**, and **ledge/setback surfaces**.
 
 ---
 
