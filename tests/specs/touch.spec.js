@@ -67,12 +67,29 @@ test.describe("touch controls", () => {
     expect(swing.box.x + swing.box.width).toBeLessThanOrEqual(LANDSCAPE.width);
     expect(swing.box.y + swing.box.height).toBeLessThanOrEqual(LANDSCAPE.height);
 
-    // Airborne with forward speed, so an anchor is reachable and the only
-    // thing missing is the button.
+    // The placement matters more than it looks. This spec deliberately renders
+    // (headless(true) would stop the loop that reads the input), and a full
+    // frame of an 983-building city under SwiftShader costs ~10 s -- so the
+    // budget is measured in FRAMES, not seconds, and the loop advances at most
+    // 5 physics substeps per frame.
+    //
+    // The first version placed the hero at y=80, which has no anchor within
+    // reach: he has to fall 2.07 s of game time before pickAnchor finds
+    // anything (measured in Node), i.e. ~25 rendered frames, i.e. past any
+    // sane timeout. It failed at 397 s having fallen 22 m, which reads as
+    // "touch is broken" and is nothing of the kind.
+    //
+    // (-486, 35, -204) is beside a ~49 m tower: pickAnchor succeeds on the
+    // FIRST step, so one rendered frame is enough. Found by scanning the
+    // colliders for a spot where step 0 attaches.
     await page.evaluate(() => {
-      window.__spidey.place(8, 80, -520, 18, 0);
+      window.__spidey.place(-486, 35, -204, 18, 0);
       window.__spidey.snapCam();
     });
+    // Assert the premise, so a future failure says which half broke: if this
+    // is empty the placement went stale, not the touch layer.
+    expect(await page.evaluate(() => window.__spidey.obs().anchors.length),
+      "no anchor is reachable from the start position — the placement is stale").toBeGreaterThan(0);
     expect(await page.evaluate(() => window.__spidey.obs().attached)).toBe(false);
     expect(await page.evaluate(() => window.__spidey.input().swing)).toBe(false);
 
@@ -90,11 +107,13 @@ test.describe("touch controls", () => {
       "the button is held but Input.swing() is false").toBe(true);
 
     // Checkpoint 3: the frames the game itself drives carry it to the hero.
-    // Wait on the CONDITION, not a frame count — rAF collapses to ~2/s here,
-    // and a fixed 150-frame loop is what timed this test out last round.
+    // Wait on the CONDITION, not a frame count. polling:100 is required, not
+    // decorative — Playwright polls on requestAnimationFrame by default, and
+    // this page starves that poll badly enough that the declared timeout never
+    // fires.
     await page.waitForFunction(
       () => window.__spidey.obs().attached === true,
-      { polling: 100, timeout: 60_000 });
+      { polling: 100, timeout: 120_000 });
 
     const held = await page.evaluate(() => window.__spidey.obs());
     expect(held.state).toBe("swing");
