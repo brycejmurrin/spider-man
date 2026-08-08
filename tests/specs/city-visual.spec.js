@@ -28,7 +28,19 @@ const framesFn = (n) => new Promise((resolve) => {
 test.describe("city render health", () => {
   test.use({ viewport: LANDSCAPE });
 
-  test("30 rendered frames produce no GL errors", async ({ page }) => {
+  // A SMALL viewport, on purpose, and the only test here that overrides it.
+  // SwiftShader is a CPU rasteriser, so its cost is dominated by fill rate.
+  // This test asked for 30 presented frames at 1280x720 and failed the 240 s
+  // budget in three consecutive runs — including one at --workers=1, so it was
+  // never the busy box the handoff assumed. That bounds the cost at MORE than
+  // 8 s per frame; the exact figure was never measured, which is why the test
+  // now reports it. 640x360 is a quarter of the pixels, and the GL error
+  // surface is unchanged: an INVALID_OPERATION is a state error, not a
+  // resolution-dependent one.
+  test.describe("with a cheap framebuffer", () => {
+    test.use({ viewport: { width: 640, height: 360 } });
+
+  test("12 rendered frames produce no GL errors", async ({ page }) => {
     test.setTimeout(240_000);
     const glErrors = [];
     page.on("console", (m) => {
@@ -38,14 +50,23 @@ test.describe("city render health", () => {
     page.on("pageerror", (e) => pageErrors.push(e.message));
 
     await load(page);
-    await page.evaluate(async (src) => {
+    // Report the per-frame cost. When this test times out again, the message
+    // should say whether the renderer got slower or the box did — the previous
+    // failure said only "timeout", which is the least useful thing it knows.
+    const ms = await page.evaluate(async (src) => {
       window.__spidey.place(8, 70, -540, 16, 0);
       window.__spidey.snapCam();
-      await eval("(" + src + ")")(30);
+      const t0 = performance.now();
+      await eval("(" + src + ")")(12);
+      return (performance.now() - t0) / 12;
     }, framesFn.toString());
 
-    expect(glErrors).toEqual([]);
+    expect(glErrors, `GL errors over 12 frames at ${ms.toFixed(0)} ms/frame`).toEqual([]);
     expect(pageErrors).toEqual([]);
+    // Not a performance budget — a tripwire. It is deliberately far above any
+    // plausible SwiftShader frame so it can only fire on a real collapse.
+    expect(ms, "a presented frame got drastically more expensive").toBeLessThan(30_000);
+  });
   });
 
   test("the light system stays under the shader's uniform-array cap", async ({ page }) => {
