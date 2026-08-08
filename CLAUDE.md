@@ -167,12 +167,38 @@ __spidey.headless(true); __spidey.obs(); __spidey.act(input, dt, n); __spidey.st
 __spidey.camera("chase"); __spidey.cameraModes(); __spidey.snapCam(); __spidey.camState()
 __spidey.city(); __spidey.swing(); __spidey.groundY(x, z); __spidey.raycast(o, d, maxT)
 __spidey.nearGeometry(pt, r)         // "is this point ON a building?" — see below
+__spidey.input()                     // the MERGED input the loop is about to read
+__spidey.music()                     // is the soundtrack actually playing? — see below
 __spidey.lightState(); __spidey.seed(n); __spidey.logs({ ns: "city" })
 ```
 
 Sharp edges: `obs()` returns null until the hero is placed; `park()` freezes the
 scene, so call `freeze(false)` before driving; `snapCam()` is required after any
 teleport, before a capture.
+
+**`obs()` MUTATES THE HERO.** It calls `pickAnchor()` three times to report
+reachable anchors, and `pickAnchor` writes `bestSide` — the auto-straighten
+memory. So a rollout that polls `obs()` every frame does not follow the same
+trajectory as one that does not, and any drift or A/B measurement that reads it
+per-frame is measuring a perturbed system. Read `hero.p` directly in Node.
+
+**`input()` is how you tell three different bugs apart.** When a virtual button
+fails to reach the hero, the DOM handler may never have fired, the merge may
+have dropped it, or the hero may have ignored it — one symptom, three causes.
+It reports only non-consuming sources: the consume-once edges (jump/zip/camera)
+and `look()` are deliberately absent, because reading them here would eat an
+input the game is owed.
+
+**`music()` exists because every other music signal is a false positive.** The
+`<audio>` elements are detached (`new Audio()`, never appended) so the DOM
+cannot find them; `startMusic()` returns `true` whether or not playback began;
+and each `play()` rejection is swallowed on purpose. `#track` appearing in the
+HUD proves only that the callback ran, one line after a `play()` that may have
+been refused. **`currentTime` advancing across two samples is the only ground
+truth**, and `error` surfaces the `MediaError` the skip-on-failure path
+otherwise discards. A test that clicks with `dispatchEvent` instead of
+`locator.click()` gets an untrusted event, no user activation, a rejected
+`play()` — and passes every check except that one.
 
 **"Did the web land on something?" is a proximity question, not a ray question.**
 Use `nearGeometry(pt, r)`, never a probe ray. A ray cast at a point that already

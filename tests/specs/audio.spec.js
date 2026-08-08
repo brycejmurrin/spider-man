@@ -95,6 +95,20 @@ test.describe("soundtrack", () => {
     expect(await page.evaluate(() => window.__spidey.music().paused)).toBe(true);
   });
 
+});
+
+/* The failure case needs its own context, because `page.route` does NOT
+   intercept requests a SERVICE WORKER makes. Measured: with the default
+   context this spec routed all three MP3s to 404 and the media clock still
+   reached 2.47 s — sw.js was serving the real file straight past the route,
+   so the test was asserting on a track that had loaded perfectly.
+
+   That is worth knowing beyond this file: any spec that injects a network
+   failure for an asset under assets/ is testing nothing unless it blocks the
+   service worker first. */
+test.describe("soundtrack failure handling", () => {
+  test.use({ serviceWorkers: "block" });
+
   test("a missing track is visible, not silently swallowed", async ({ page }) => {
     // The error path deliberately skips on rather than taking the game with it,
     // which is right — but it must still be OBSERVABLE, or a broken deploy that
