@@ -211,7 +211,8 @@ import { createApi } from "./game/spidey-api.js";
   const _wrist = [0, 0, 0];
   const rootMat = new Float32Array(16);
   const segWorld = new Float32Array(16);
-  const heroOpts = { roughness: 0.55, specular: 0.6, emissive: 0.10 };
+  // Cloth, not plastic: 0.55/0.6 read as vinyl (docs/research/HERO-MODEL.md).
+  const heroOpts = { roughness: 0.82, specular: 0.28, emissive: 0.10 };
 
   function heroRoot(px, py, pz, head) {
     // yaw-only root; pitch/roll live in the segment poses
@@ -310,6 +311,22 @@ import { createApi } from "./game/spidey-api.js";
         gfx.shadowEnd();
       }
     }
+    // Pose FIRST, then shadow, then draw — the shadow pass and the colour pass
+    // must show the same hero. Posing after the shadow cast meant the shadow
+    // used the PREVIOUS frame's locals.
+    heroRoot(ix, iy, iz, ihead);
+    const tetherPitch = hero.anchor
+      ? Math.atan2(Math.hypot(hero.anchor[0] - ix, hero.anchor[2] - iz), hero.anchor[1] - iy) : 0;
+    // Yaw to the anchor in HERO space: which side the web is on. pose() has
+    // documented this parameter from the start and never received it.
+    let tetherYaw = 0;
+    if (hero.anchor) {
+      const ay = Math.atan2(hero.anchor[0] - ix, hero.anchor[2] - iz) - ihead;
+      tetherYaw = Math.atan2(Math.sin(ay), Math.cos(ay));   // wrap to [-pi, pi]
+    }
+    pose(heroLocals, hero.state, hero.state === "ground" ? frame.time : hero.airTime,
+      hero.speed, { tetherPitch, tetherYaw, diving: hero.v[1] < -20, dt });
+
     // dynamic map: the hero, every frame (carArmed clears each present)
     if (gfx.carShadowBegin) {
       const sd = frame.sunDir;
@@ -318,8 +335,13 @@ import { createApi } from "./game/spidey-api.js";
       M4.orthoTo(mCProj, -42, 42, -42, 42, 1.0, 320);
       M4.mulTo(mCVP, mCProj, mCView);
       gfx.carShadowBegin(mCVP);
-      heroRoot(ix, iy, iz, ihead);
-      gfx.castShadow(heroMeshes.torso, rootMat);
+      // Every segment, POSED. This cast heroMeshes.torso with rootMat alone —
+      // but the pelvis offset lives in heroLocals.torso, so the shadow was an
+      // un-posed box floating ~0.38 m up, and 9 of 10 segments cast nothing.
+      for (const s of SEGMENTS) {
+        M4.mulTo(segWorld, rootMat, heroLocals[s]);
+        gfx.castShadow(heroMeshes[s], segWorld);
+      }
       gfx.carShadowEnd();
     }
 
@@ -327,12 +349,7 @@ import { createApi } from "./game/spidey-api.js";
     gfx.drawSky(frameSky);
     drawWorld();
 
-    // hero: pose + segment draws
-    heroRoot(ix, iy, iz, ihead);
-    const tetherPitch = hero.anchor
-      ? Math.atan2(Math.hypot(hero.anchor[0] - ix, hero.anchor[2] - iz), hero.anchor[1] - iy) : 0;
-    pose(heroLocals, hero.state, hero.state === "ground" ? frame.time : hero.airTime,
-      hero.speed, { tetherPitch, diving: hero.v[1] < -20 });
+    // hero: segment draws (posed above)
     for (const s of SEGMENTS) {
       M4.mulTo(segWorld, rootMat, heroLocals[s]);
       gfx.draw(heroMeshes[s], segWorld, heroOpts);

@@ -147,6 +147,11 @@ export function createHero(colliders) {
     }
 
     if (state === "wallrun") {
+      // airT is the POSE CLOCK (js/game.js feeds hero.airTime to pose(), and
+      // that is its only consumer). Without this line it never advances while
+      // wall-running, so the leg cycle -- ph = t * 9 in hero3d.js -- is frozen
+      // and the hero slides up the wall in a fixed star shape.
+      airT += dt;
       wallV -= C.WALLRUN_DECAY * dt;
       v[1] = wallV;
       // hug the wall; jump kicks off it

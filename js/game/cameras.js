@@ -71,13 +71,23 @@ export function createCameras(colliders) {
      subject: { p:[3], v:[3], head, speed, state } */
   const _e = [0, 0, 0], _t = [0, 0, 0], _c = [0, 0, 0];
   function vantage(sub, mode) {
-    const spN = Math.min(1, sub.speed / 40);
+    // Normalise against the model's TOP speed, not 40. Measured cruise is
+    // 42 m/s and VMAX is 66, so a /40 ramp saturated before the player reached
+    // ordinary swinging speed — the strongest perceived-speed lever in the
+    // game was a constant across the entire band it lives in.
+    //
+    // The ceilings also move up. Lab work on self-motion (Van Veen 1998, via
+    // Caramenti 2019) puts speed UNDERestimation below ~73 degrees of field of
+    // view and overestimation above ~107, so an 80-degree peak sat on the
+    // wrong side of that line: the old top end made the game feel slower than
+    // it is. See docs/research/SWING-FEEL.md.
+    const spN = Math.min(1, sub.speed / 66);
     const hx = Math.sin(sub.head + orbitYaw), hz = Math.cos(sub.head + orbitYaw);
     let back, up, lead, f;
-    if (mode === "far") { back = 10.5; up = 4.2; lead = 9; f = 61 + 8 * spN; }
-    else if (mode === "swing") { back = 5.2; up = 1.4; lead = 8; f = 66 + 14 * spN; }
+    if (mode === "far") { back = 10.5; up = 4.2; lead = 9; f = 61 + 18 * spN; }
+    else if (mode === "swing") { back = 5.2; up = 1.4; lead = 8; f = 66 + 32 * spN; }
     else if (mode === "heli") { back = 26; up = 30; lead = 4; f = 52; }
-    else { back = 6.4; up = 2.3; lead = 6; f = 58 + 10 * spN; }
+    else { back = 6.4; up = 2.3; lead = 6; f = 58 + 24 * spN; }
     up += orbitPitch * back;
     _t[0] = sub.p[0] + hx * lead;
     _t[1] = sub.p[1] + 1.4 + (mode === "heli" ? 0 : 0.6) + orbitPitch * -6;
@@ -156,7 +166,10 @@ export function createCameras(colliders) {
         eye[i] = damp(eye[i], v.eye[i], lE, dt);
         tgt[i] = damp(tgt[i], v.tgt[i], lT, dt);
       }
-      fov = damp(fov, v.fov, 4, dt);
+      // Asymmetric on purpose (PLAN.md 2.7): snap OUT to a wide field as speed
+      // arrives, ease back in slowly. Symmetric damping makes acceleration and
+      // deceleration feel identical, which wastes the cue.
+      fov = damp(fov, v.fov, v.fov > fov ? 7 : 2.5, dt);
       // roll from lateral velocity while swinging (slip-roll, λ from Apex)
       const fx = Math.sin(sub.head), fz = Math.cos(sub.head);
       const lat = sub.speed > 1 ? (sub.v[0] * fz - sub.v[2] * fx) / Math.max(sub.speed, 1) : 0;

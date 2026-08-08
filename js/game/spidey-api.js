@@ -6,6 +6,7 @@ import { Log } from "../log.js";
 import { CAM_MODES } from "./cameras.js";
 import { HeroConsts } from "./hero-consts.js";
 import { Input } from "./input.js";
+import { poseSnap } from "../hero/hero3d.js";
 
 export function createApi(G) {
   const hero = G.hero, cams = G.cams;
@@ -58,6 +59,9 @@ export function createApi(G) {
       hero.reset(x, y, z, speed || 0, head || 0);
       G.snapPrev();
       cams.snap({ p: hero.p, v: hero.v, head: hero.head, speed: speed || 0, state: hero.state });
+      // Same reason snapCam() exists: easing a pose across a teleport is worse
+      // than not easing it, and a screenshot taken during that ease is a lie.
+      poseSnap();
       return { x: hero.p[0], y: hero.p[1], z: hero.p[2] };
     },
     /* park(frac) — stand on rooftop #floor(frac * buildings), frozen scene:

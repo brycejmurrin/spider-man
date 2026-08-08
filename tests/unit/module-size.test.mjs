@@ -31,7 +31,12 @@ const CEILINGS = {
   "js/city/buildings.js": 420,
   "js/game/hero.js": 380,   // +80: anchor scoring, release curve, stall guard,
                             // constraint energy fix — each with its rationale
-  "js/hero/hero3d.js": 240,
+  // +20, deliberately: pose smoothing (nine damped scalars, so a state change
+  // no longer snaps the right arm ~55 degrees in one frame) and web-arm
+  // aiming. Both are pose work in the file that owns posing; extracting them
+  // would put half a pose in another module. Lower this again if the mesh
+  // builder ever moves out.
+  "js/hero/hero3d.js": 260,
   "js/city/colliders.js": 220,
   "js/city/citygen.js": 220,
   "js/game/spidey-api.js": 180,

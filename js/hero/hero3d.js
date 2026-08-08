@@ -120,6 +120,24 @@ function chain(m, parent, rx, rz, off) {
   }
 }
 
+/* Pose smoothing. pose() used to be memoryless, so every state change snapped:
+   leaving a swing moved the right arm about 55 degrees in a single frame,
+   which is the difference between "a character" and "a diagram of a character".
+
+   Nine damped scalars, the same 1 - exp(-lambda*dt) form cameras.js uses, so
+   the rate is frame-rate independent. State lives at module scope because
+   there is exactly one hero; snap() exists for teleports, where easing from
+   the old pose across half a city is worse than not easing at all.
+
+   This is render-only. It never touches hero.step(), so determinism is
+   unaffected — the physics does not know the pose exists. */
+const SM = { torsoPitch: 0, legLA: 0, legRA: 0, kneeL: 0, kneeR: 0,
+             armLA: 0, armRA: 0, elbL: 0.25, elbR: 0.25, headPitch: 0, armRZ: 0 };
+const SM_LAMBDA = 14;      // ~0.16 s to close 90% of a gap
+let smReady = false;
+
+export function poseSnap() { smReady = false; }
+
 export function pose(out, state, t, speed, extra) {
   extra = extra || {};
   const J = JOINTS;
@@ -159,13 +177,50 @@ export function pose(out, state, t, speed, extra) {
       legLA = 0.3; legRA = 0.15; kneeL = 0.55; kneeR = 0.9;  // one leg tucked
     }
   }
+  /* Aim the web arm at the side the anchor is actually on. The rig has no Y
+     axis, but it does not need one: the shoulder already carries a constant
+     abduction (+0.22 left, -0.22 right), so leaning the right arm further out
+     is a modulation of that. More negative = further to the hero's right, so a
+     positive tetherYaw (anchor to the right) subtracts.
+
+     Without this the arm pointed straight ahead regardless — while pickAnchor
+     deliberately alternates sides, so it was wrong about half the time by
+     design. */
+  let armRZ = 0;
+  if (state === "swing" && extra.tetherYaw) {
+    armRZ = Math.max(-0.6, Math.min(0.6, -extra.tetherYaw * 0.45));
+  }
+
+  // Damp everything toward its target. dt comes from the driver; a huge or
+  // missing dt means a teleport or a first frame, so snap instead of easing
+  // across the city.
+  const dt = extra.dt;
+  if (!smReady || !(dt > 0) || dt > 0.25) {
+    SM.torsoPitch = torsoPitch; SM.legLA = legLA; SM.legRA = legRA;
+    SM.kneeL = kneeL; SM.kneeR = kneeR; SM.armLA = armLA; SM.armRA = armRA;
+    SM.elbL = elbL; SM.elbR = elbR; SM.headPitch = headPitch; SM.armRZ = armRZ;
+    smReady = true;
+  } else {
+    const k = 1 - Math.exp(-SM_LAMBDA * dt);
+    SM.torsoPitch += (torsoPitch - SM.torsoPitch) * k;
+    SM.legLA += (legLA - SM.legLA) * k;   SM.legRA += (legRA - SM.legRA) * k;
+    SM.kneeL += (kneeL - SM.kneeL) * k;   SM.kneeR += (kneeR - SM.kneeR) * k;
+    SM.armLA += (armLA - SM.armLA) * k;   SM.armRA += (armRA - SM.armRA) * k;
+    SM.elbL += (elbL - SM.elbL) * k;      SM.elbR += (elbR - SM.elbR) * k;
+    SM.headPitch += (headPitch - SM.headPitch) * k;
+    SM.armRZ += (armRZ - SM.armRZ) * k;
+  }
+  torsoPitch = SM.torsoPitch; legLA = SM.legLA; legRA = SM.legRA;
+  kneeL = SM.kneeL; kneeR = SM.kneeR; armLA = SM.armLA; armRA = SM.armRA;
+  elbL = SM.elbL; elbR = SM.elbR; headPitch = SM.headPitch; armRZ = SM.armRZ;
+
   setRotXZ(out.torso, torsoPitch, 0, J.pelvis[0], J.pelvis[1], J.pelvis[2]);
   chain(out.head, out.torso, headPitch - torsoPitch * 0.6, 0,
     [J.neck[0] - J.pelvis[0], J.neck[1] - J.pelvis[1], J.neck[2] - J.pelvis[2]]);
   const shl = [J.shoulderL[0] - J.pelvis[0], J.shoulderL[1] - J.pelvis[1], 0];
   const shr = [J.shoulderR[0] - J.pelvis[0], J.shoulderR[1] - J.pelvis[1], 0];
   chain(out.upperArmL, out.torso, armLA, 0.22, shl);
-  chain(out.upperArmR, out.torso, armRA, -0.22, shr);
+  chain(out.upperArmR, out.torso, armRA, -0.22 + armRZ, shr);
   chain(out.foreArmL, out.upperArmL, -elbL, 0, [0, -J.elbowDrop, 0]);
   chain(out.foreArmR, out.upperArmR, -elbR, 0, [0, -J.elbowDrop, 0]);
   const hl = [J.hipL[0] - J.pelvis[0], 0, 0], hr = [J.hipR[0] - J.pelvis[0], 0, 0];
