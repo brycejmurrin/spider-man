@@ -115,6 +115,9 @@ export const Input = {
      the deltas alone: a thumb holding a steady offset produces no deltas at
      all, which is indistinguishable from nobody touching the glass. */
   lookHeld() { return Touch.state.lookHeld; },
+  /* The undrained touch look accumulator. Read-only — look() is the consuming
+     read. Exists so the dead zone is observable without a rendered frame. */
+  lookRaw() { return [Touch.state.lookDX, Touch.state.lookDY]; },
 
   // consume-once edges — a touch latch is consumed here too, so a tap that
   // lands between two frames is never dropped and never fires twice.

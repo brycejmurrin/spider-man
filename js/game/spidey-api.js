@@ -139,8 +139,13 @@ export function createApi(G) {
         touch: Input.touchActive,
         moveX: Input.moveX(), moveZ: Input.moveZ(),
         swing: Input.swing(), dive: Input.dive(),
-        // lookHeld is non-consuming (look() itself is not, so it stays out).
-        lookHeld: Input.lookHeld(),
+        // lookHeld and the raw look accumulator are non-consuming; look()
+        // itself IS consuming, so it stays out. Reading lookDX/lookDY here is
+        // how the SWING zone's dead zone is testable at all: the drain happens
+        // in render(), which is skipped under headless(true), so a spec can
+        // assert "a 10 px thumb roll accumulated nothing" without paying for a
+        // ~10 s SwiftShader frame per assertion.
+        lookHeld: Input.lookHeld(), lookDX: Input.lookRaw()[0], lookDY: Input.lookRaw()[1],
       };
     },
 

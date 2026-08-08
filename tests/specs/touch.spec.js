@@ -186,20 +186,33 @@ test.describe("touch controls", () => {
   // and the view could only be steered indirectly, by pushing the stick and
   // waiting for the auto-recentre to catch up.
   test.describe("the SWING zone also steers the camera", () => {
+    // This test used to make eight separate page.evaluate round-trips against a
+    // page presenting one frame every ~10 s, and died on the 360 s TEST budget
+    // rather than on any assertion — the waitForFunction's own 60 s bound never
+    // came near firing, which is what identified the cost as round-trips and
+    // not an unreachable condition.
+    //
+    // The fix is to assert each property where it is actually implemented. The
+    // dead zone lives in touch.js's accumulator, and Input.look() drains that
+    // accumulator inside render() — which headless(true) skips entirely. So
+    // under headless the accumulator is directly readable and every assertion
+    // is instant. Only the LAST claim, that the chain reaches the camera at
+    // all, genuinely needs presented frames, and it pays for them once.
     test("a slide looks without ever cancelling the hold", async ({ page, context }) => {
       test.slow();
       await bootTouch(page);
       const swing = await centreOf(page, "#t-swing");
       const cdp = await context.newCDPSession(page);
-
-      const yaw = () => page.evaluate(() => window.__spidey.camState().orbitYaw);
-      const before = await yaw();
+      const inp = () => page.evaluate(() => window.__spidey.input());
+      await page.evaluate(() => window.__spidey.headless(true));
 
       await cdp.send("Input.dispatchTouchEvent", {
         type: "touchStart", touchPoints: [{ x: swing.x, y: swing.y, id: 5 }],
       });
-      expect(await page.evaluate(() => window.__spidey.input().swing)).toBe(true);
-      expect(await page.evaluate(() => window.__spidey.input().lookHeld)).toBe(true);
+      const down = await inp();
+      expect(down.swing, "pressing the SWING zone did not swing").toBe(true);
+      expect(down.lookHeld, "the look pointer was not registered").toBe(true);
+      expect(down.lookDX, "the press alone accumulated look travel").toBe(0);
 
       // A press alone must not move the view. A thumb rolls a few pixels as it
       // presses, and without the dead zone every swing would come with an
@@ -207,7 +220,7 @@ test.describe("touch controls", () => {
       await cdp.send("Input.dispatchTouchEvent", {
         type: "touchMove", touchPoints: [{ x: swing.x + 10, y: swing.y, id: 5 }],
       });
-      expect(await yaw(), "a 10 px thumb roll moved the camera").toBe(before);
+      expect((await inp()).lookDX, "a 10 px thumb roll crossed the dead zone").toBe(0);
 
       // Past the dead zone it steers — and the hold survives, which is the
       // whole point of the dual-purpose control.
@@ -216,18 +229,23 @@ test.describe("touch controls", () => {
           type: "touchMove", touchPoints: [{ x: swing.x + 10 + i * 20, y: swing.y, id: 5 }],
         });
       }
-      // The orbit is applied in the render loop, so this needs real frames —
-      // a handful at ~10 s each under SwiftShader. polling:100 is required,
-      // not decorative: Playwright polls on rAF by default and this page
-      // starves that poll badly enough that the declared timeout never fires.
+      const slid = await inp();
+      expect(slid.lookDX, "sliding past the dead zone accumulated no look").toBeGreaterThan(0);
+      expect(slid.swing, "sliding to look released the swing — a look is not a cancel").toBe(true);
+
+      // And it reaches the camera. This is the only claim here that needs real
+      // frames, because Input.look() and cams.orbit() live in render(), which
+      // headless(true) skips. polling:100 is required, not decorative:
+      // Playwright polls on rAF by default and this page starves that poll
+      // badly enough that a declared timeout never gets to fire.
+      await page.evaluate(() => window.__spidey.headless(false));
       await page.waitForFunction(() => window.__spidey.camState().orbitYaw !== 0,
-        { polling: 100, timeout: 60_000 });
-      expect(await page.evaluate(() => window.__spidey.input().swing),
-        "sliding to look released the swing — a look is not a cancel").toBe(true);
+        { polling: 100, timeout: 90_000 });
 
       await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
-      expect(await page.evaluate(() => window.__spidey.input().swing)).toBe(false);
-      expect(await page.evaluate(() => window.__spidey.input().lookHeld)).toBe(false);
+      const up = await inp();
+      expect(up.swing, "lifting did not release the swing").toBe(false);
+      expect(up.lookHeld).toBe(false);
     });
 
     // The per-control pointerId bookkeeping is the oldest rule in touch.js and
