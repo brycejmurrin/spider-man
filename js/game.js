@@ -429,7 +429,7 @@ import { createApi } from "./game/spidey-api.js";
     get testInput() { return testInput; }, set testInput(v) { testInput = v; },
     get city() { return city; },
     get citySeed() { return citySeed; },
-    hero, cams, gfx, update, PHYS_DT, play, loadCity,
+    hero, cams, gfx, audio: GameAudio, update, PHYS_DT, play, loadCity,
     setSeed(n) { citySeed = n; store.set("citySeed", n); },
     snapPrev() { rPrev[0] = hero.p[0]; rPrev[1] = hero.p[1]; rPrev[2] = hero.p[2]; rPrevHead = hero.head; },
     frame, presentOpts,

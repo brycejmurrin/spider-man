@@ -171,6 +171,28 @@ export const GameAudio = {
   get track() { return musicOn && els ? TRACKS[cur] : null; },
   onTrackChange(fn) { onTrack = fn; },
 
+  /* musicState() — everything a test needs to tell "playing" from "play() was
+     called and refused", which nothing else here can distinguish: the elements
+     are detached so the DOM cannot find them, startMusic() returns true either
+     way, and every play() rejection is deliberately swallowed. `currentTime`
+     advancing across two samples is the only ground truth. `error` surfaces
+     the MediaError the skip-on-failure path otherwise discards entirely. */
+  musicState() {
+    const a = els && els[cur];
+    return {
+      on: musicOn, vol: musicVol, started: !!els,
+      track: TRACKS[cur].id, title: TRACKS[cur].title,
+      paused: a ? a.paused : true,
+      currentTime: a ? a.currentTime : 0,
+      duration: a && isFinite(a.duration) ? a.duration : 0,
+      readyState: a ? a.readyState : 0,
+      volume: a ? a.volume : 0,
+      ended: a ? a.ended : false,
+      error: a && a.error ? a.error.code : null,
+      ctx: ctx ? ctx.state : null,
+    };
+  },
+
   /* wind loop, driven by speed01 every frame — loudens AND brightens */
   setWind(speed01) {
     if (!sfxOk()) { if (windGain) windGain.gain.value = 0; return; }

@@ -56,7 +56,16 @@ async function precacheAssetLists() {
     if (!ref) continue;
     const u = ref[1];
     if (/^([a-z]+:)?\/\//i.test(u)) continue;   // skip any absolute/cross-origin URL
-    if (m[1].toLowerCase() === "script" || /\brel="stylesheet"/i.test(m[0])) {
+    // modulepreload is ESSENTIAL here, and this is the one line that differs
+    // from the sibling project's version of this parser. There, JS arrives as
+    // ~150 <script src> tags, so "script or stylesheet" covers the whole app.
+    // This shell loads ONE entry module and announces the other 29 only as
+    // <link rel="modulepreload">. Bucketing those as optional meant an offline
+    // install "succeeded" with the entire module graph missing — and since a
+    // successful install sweeps the previous cache generation, it replaced a
+    // working offline copy with a shell that cannot boot.
+    if (m[1].toLowerCase() === "script" ||
+        /\brel="stylesheet"/i.test(m[0]) || /\brel="modulepreload"/i.test(m[0])) {
       essential.add(u);
     } else {
       optional.add(u);

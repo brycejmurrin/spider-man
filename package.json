@@ -11,6 +11,8 @@
     "test:smoke": "node tools/run-playwright.mjs tests/specs/smoke.spec.js",
     "test:swing": "node tools/run-playwright.mjs tests/specs/swing.spec.js",
     "test:visual": "node tools/run-playwright.mjs tests/specs/city-visual.spec.js",
+    "test:touch": "node tools/run-playwright.mjs tests/specs/touch.spec.js",
+    "test:audio": "node tools/run-playwright.mjs tests/specs/audio.spec.js",
     "test:tooling-fast": "node --test tests/unit/*.test.mjs"
   },
   "devDependencies": {

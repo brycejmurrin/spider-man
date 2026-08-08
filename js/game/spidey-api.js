@@ -5,6 +5,7 @@
 import { Log } from "../log.js";
 import { CAM_MODES } from "./cameras.js";
 import { HeroConsts } from "./hero-consts.js";
+import { Input } from "./input.js";
 
 export function createApi(G) {
   const hero = G.hero, cams = G.cams;
@@ -118,6 +119,30 @@ export function createApi(G) {
       return { numLights: L ? L.length / 15 : 0, exposure: G.frame.exposure,
                ambientSky: [...G.frame.ambientSky], ambientGround: [...G.frame.ambientGround] };
     },
+
+    /* input() — the MERGED input the loop is about to read, from whichever
+       source is live (keys, gamepad, touch). Read-only: the consume-once
+       edges (jump/zip/camera) and look() are deliberately absent, because
+       reading them here would eat an input the game is owed.
+
+       This exists because the touch layer was otherwise unobservable: when a
+       virtual button failed to reach the hero there was no way to tell whether
+       the DOM handler never fired, the merge dropped it, or the hero ignored
+       it. Three different bugs with one symptom. */
+    input() {
+      return {
+        touch: Input.touchActive,
+        moveX: Input.moveX(), moveZ: Input.moveZ(),
+        swing: Input.swing(), dive: Input.dive(),
+      };
+    },
+
+    /* music() — is the soundtrack ACTUALLY playing? Every other signal this
+       subsystem offers is a false positive: the elements are detached so the
+       DOM cannot see them, startMusic() returns true regardless, and a failed
+       play() is swallowed. currentTime advancing across two samples is the
+       only fact that separates playing from refused. */
+    music() { return G.audio.musicState(); },
 
     // ── logs ─────────────────────────────────────────────────────────────
     logs(o) { return Log.records(o || {}); },

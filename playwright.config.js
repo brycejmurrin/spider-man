@@ -53,7 +53,12 @@ const LAUNCH = {
 // Keep this list exhaustive against tests/specs/*.spec.js (a coverage-audit npm script
 // asserts every spec lands in exactly one project).
 const RENDER_SPECS = [
-  "smoke", "city-visual",
+  // touch: asserts DOM visibility and drives LIVE rAF frames through the real
+  // input path (act() would bypass the layer it exists to test), so it is a
+  // rendering spec even though it takes no screenshot.
+  // audio: asserts DOM visibility (#track) and depends on the media clock
+  // advancing in real time, which a loaded box starves.
+  "smoke", "city-visual", "touch", "audio",
 ].map((n) => `**/${n}.spec.js`);
 
 // Default worker cap: every worker owns a Chromium + SwiftShader process.

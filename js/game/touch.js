@@ -105,6 +105,7 @@ export const Touch = {
     // ── the buttons ────────────────────────────────────────────────────────
     // A HOLD button owns its pointer for the same reason the stick does. An
     // EDGE button sets its latch on press and is consumed by the game loop.
+    const holds = [];                 // every hold button, for the safety nets
     const hold = (el, key) => {
       let id = null;
       el.addEventListener("pointerdown", (e) => {
@@ -113,13 +114,15 @@ export const Touch = {
         try { el.setPointerCapture(e.pointerId); } catch (_) {}
         e.preventDefault();
       });
-      const off = (e) => {
-        if (e.pointerId !== id) return;
+      const release = () => {
+        if (id == null) return;
         id = null; state[key] = false; el.classList.remove("on");
       };
+      const off = (e) => { if (e.pointerId === id) release(); };
       el.addEventListener("pointerup", off);
       el.addEventListener("pointercancel", off);
       el.addEventListener("lostpointercapture", off);
+      holds.push({ has: (pid) => id === pid, release });
     };
     const edge = (el, key) => {
       el.addEventListener("pointerdown", (e) => {
@@ -134,14 +137,44 @@ export const Touch = {
     edge(layer.querySelector("#t-jump"), "jumpEdge");
     edge(layer.querySelector("#t-zip"), "zipEdge");
 
-    // A pointer that never gets its pointerup — the app backgrounds mid-hold,
-    // iOS steals the touch for the app switcher — would leave SWING stuck on
-    // forever. Both of these fire in exactly that case.
+    // ── the release nets ───────────────────────────────────────────────────
+    // A held button that never sees its pointerup stays held forever, and the
+    // held buttons here are SWING and DIVE — a stuck SWING IS the game. One
+    // net is not enough, and each of these covers a case the others cannot.
+    // Ported from Apex 26's input.js, which found them the hard way.
     const releaseAll = () => {
       state.swing = state.dive = false;
       state.moveX = state.moveZ = 0; stickId = null; setKnob(0, 0);
       layer.querySelectorAll(".on").forEach((el) => el.classList.remove("on"));
     };
+
+    // #1 — window-level, CAPTURE phase: a pointer that lifts or cancels
+    // anywhere on the page releases the button holding it, even when the
+    // button element itself never receives the event. Capture phase so an
+    // overlay or a stopPropagation between here and the button cannot swallow
+    // it. This matters most when setPointerCapture threw (it is inside a
+    // try/catch), because then nothing redirects the lift back to the element.
+    const releasePointer = (e) => {
+      for (const h of holds) if (h.has(e.pointerId)) h.release();
+    };
+    window.addEventListener("pointerup", releasePointer, true);
+    window.addEventListener("pointercancel", releasePointer, true);
+
+    // #4 — and this is the one that actually saves you, because it is the only
+    // net not built on pointer events. WebKit under heavy multi-touch drops a
+    // pointerup outright while still delivering the touch-event lift, and iOS
+    // never reuses pointerIds — so the ghost id is PERMANENT and a fresh
+    // press-and-release cannot clear it. Apex 26 shipped this after a player
+    // reported a throttle that stayed on no matter what they pressed.
+    // TouchEvent.touches is ground truth the pointer stream cannot contradict:
+    // zero touches on the glass means nothing is held, whatever the pointer
+    // bookkeeping believes. A finger still down keeps touches.length > 0, so a
+    // legitimate hold survives.
+    window.addEventListener("touchend", (e) => { if (e.touches.length === 0) releaseAll(); }, true);
+    window.addEventListener("touchcancel", (e) => { if (e.touches.length === 0) releaseAll(); }, true);
+
+    // #3 — the app backgrounds mid-hold and iOS steals the touch for the app
+    // switcher, so no lift of any kind is ever delivered.
     window.addEventListener("blur", releaseAll);
     document.addEventListener("visibilitychange", () => { if (document.hidden) releaseAll(); });
 
