@@ -45,6 +45,33 @@ const CANDS = [[1, 1, 1], [1, 1, -1], [0.7, 2.0, 1], [0.35, 3.2, 0]];
    is looking somewhere on purpose. This is what makes that impossible. */
 const RECENTRE_TAIL = 1.2;
 
+/* Radial speed blur drive — the SECOND STAGE of a series ramp, not a parallel
+   cue. The FOV ramp normalises against VMAX (spN = speed/66) and then pins:
+   measured over a 60 s midtown rollout, 51% of swing-mode frames sit at the
+   ceiling and 35.6% of frames exceed VMAX outright. Above that the game's only
+   perceived-speed cue is a constant — which is the Spider-Man 2 static-camera
+   failure reproduced by a different mechanism. This opens where the FOV has
+   spent most of its range and saturates above VMAX where it has none left.
+
+   Driven from RAW SPEED, never from cams.fov: deriving it from the FOV would
+   make it a monotone function of the cue it exists to extend, and it would
+   inherit the very saturation it is covering.
+
+   45: measured p25 speed is 11.6 and p50 is 42.7, so ~40% of frames pay
+   nothing — and the shader's `if (uSpeedBlur > 0.001)` is a uniform branch, so
+   those frames are genuinely free. 82: measured pooled max is 82.4 and p99 is
+   80.1, so the top of the curve is a dive slingshot only. The ^1.5 keeps it
+   invisible through its own low half.
+
+   Arc bottom vs apex needs no code — the pendulum does it. Per-swing medians
+   are 62.8 m/s at the apex and 75.6 at the bottom, which through this curve is
+   a 1.9x blur pulse every arc, synchronised to the swing for free. */
+const BLUR_V0 = 45, BLUR_V1 = 82, BLUR_MAX = 0.9;
+export function speedBlurFor(speed) {
+  const t = Math.max(0, Math.min(1, (speed - BLUR_V0) / (BLUR_V1 - BLUR_V0)));
+  return BLUR_MAX * t * t * Math.sqrt(t);
+}
+
 export function createCameras(colliders) {
   const eye = [0, 40, -60], tgt = [0, 20, 0];
   let fov = 62, roll = 0, shake = 0, slipSm = 0;
@@ -196,11 +223,36 @@ export function createCameras(colliders) {
       // arrives, ease back in slowly. Symmetric damping makes acceleration and
       // deceleration feel identical, which wastes the cue.
       fov = damp(fov, v.fov, v.fov > fov ? 7 : 2.5, dt);
-      // roll from lateral velocity while swinging (slip-roll, λ from Apex)
+      // Roll into the SWING PLANE, not into slip.
+      //
+      // The term this replaces was a slip angle — velocity perpendicular to
+      // HEADING — inherited verbatim from the racing sibling, where heading is
+      // the car's yaw and lags the velocity vector, so slip is the whole story.
+      // Here the last act of every hero.step() is
+      //   if (hsp > 1.5) head = Math.atan2(v[0], v[2]);
+      // so head IS the horizontal velocity direction, and substituting it makes
+      // the numerator (v0·v2 − v2·v0)/hsp — IDENTICALLY ZERO on every frame the
+      // hero is moving. It was nonzero only when nearly stationary: exactly
+      // inverted. Measured through this tick() over 2,998 swing frames on seed
+      // 42: max 1.10°, mean 0.009°, against the ±8° the gain was written for.
+      // The camera has never rolled.
+      //
+      // The tether's tilt about the forward axis is what the reference banks
+      // on, and it is a quantity webline already draws.
       const fx = Math.sin(sub.head), fz = Math.cos(sub.head);
-      const lat = sub.speed > 1 ? (sub.v[0] * fz - sub.v[2] * fx) / Math.max(sub.speed, 1) : 0;
-      slipSm = damp(slipSm, Math.max(-1, Math.min(1, lat)), 10, dt);
-      const rollT = (sub.state === "swing" ? slipSm * 0.14 : slipSm * 0.05);
+      let bank = 0;
+      if (sub.anchor) {
+        const ax = sub.anchor[0] - sub.p[0], ay = sub.anchor[1] - (sub.p[1] + 1.4),
+              az = sub.anchor[2] - sub.p[2];
+        const L = Math.hypot(ax, ay, az) || 1;
+        // right = cross(up, fwd) = (fz, 0, −fx). Clamp the denominator: an
+        // anchor level with the chest would otherwise make the ratio explode.
+        bank = Math.atan2((ax * fz - az * fx) / L, Math.max(0.2, ay / L));
+      } else if (sub.speed > 1) {
+        bank = (sub.v[0] * fz - sub.v[2] * fx) / Math.max(sub.speed, 1);   // free-fall slip
+      }
+      slipSm = damp(slipSm, Math.max(-1, Math.min(1, bank)), 10, dt);
+      const rollT = (sub.state === "swing" ? slipSm * 0.45 : slipSm * 0.05);
       roll = damp(roll, rollT, 7, dt);
       // trauma shake — squared so grazes barely move and slams hit hard
       if (shake > 0) {

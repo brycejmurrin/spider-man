@@ -15,7 +15,7 @@ import { createHero } from "./game/hero.js";
 import { HeroConsts } from "./game/hero-consts.js";
 import { buildHero, pose, SEGMENTS, wristR } from "./hero/hero3d.js";
 import { createWebline } from "./game/webline.js";
-import { createCameras, CAM_MODES } from "./game/cameras.js";
+import { createCameras, CAM_MODES, speedBlurFor } from "./game/cameras.js";
 import { Input } from "./game/input.js";
 import { createHud } from "./game/hud.js";
 import { GameAudio } from "./game/audio.js";
@@ -56,10 +56,8 @@ import { createApi } from "./game/spidey-api.js";
     city = null;                        // drop before building (memory)
     city = buildCity(seed, { night });
     meshes.ground = gfx.createMesh(city.ground);
-    meshes.props = gfx.createChunkedMesh
-      ? gfx.createChunkedMesh(city.out, 72) : gfx.createMesh(city.out);
-    meshes.glass = gfx.createChunkedMesh
-      ? gfx.createChunkedMesh(city.glassBuf, 72) : gfx.createMesh(city.glassBuf);
+    meshes.props = gfx.createChunkedMesh ? gfx.createChunkedMesh(city.out, 72) : gfx.createMesh(city.out);
+    meshes.glass = gfx.createChunkedMesh ? gfx.createChunkedMesh(city.glassBuf, 72) : gfx.createMesh(city.glassBuf);
     shadowSnap.x = Infinity;            // invalidate the shadow cache
     Log.info("game", `city seed=${seed} buildings=${city.stats.buildings}`);
   }
@@ -244,7 +242,7 @@ import { createApi } from "./game/spidey-api.js";
     const ihead = rPrevHead + dh * renderAlpha;
 
     // camera
-    const sub = { p: [ix, iy, iz], v: hero.v, head: ihead, speed: hero.speed, state: hero.state };
+    const sub = { p: [ix, iy, iz], v: hero.v, head: ihead, speed: hero.speed, state: hero.state, anchor: hero.anchor };
     if (state === "menu") {
       const t = performance.now() * 0.0045;
       const R = CITY.SPAN * 0.42;
@@ -367,6 +365,7 @@ import { createApi } from "./game/spidey-api.js";
       webline.draw(MAT_IDENT);
     } else if (webline.active) webline.free();
 
+    presentOpts.speedBlur = state === "play" ? speedBlurFor(hero.speed) : 0;
     gfx.present(presentOpts);
   }
 
