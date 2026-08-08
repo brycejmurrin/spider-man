@@ -49,40 +49,92 @@ dialog.screen::backdrop { background: transparent; }
 
    env(safe-area-inset-*) keeps the controls clear of the notch and the home
    indicator; the shell already ships viewport-fit=cover, which is what makes
-   those values non-zero. */
+   those values non-zero.
+
+   Every inset below is `env(...) + var(--safe-*)`, and NOT `env(..., var(...))`.
+   The fallback form looks equivalent and is not: env()'s fallback applies only
+   where env() is UNSUPPORTED, and Chromium supports it and reports 0 — so a
+   headless test could never see a real phone's 47 px side inset. Adding the
+   two lets a spec inject `--safe-l: 47px` and assert against the real budget,
+   while a real iPhone gets env() and a zero var. The layout is the thing that
+   has never been checked at phone size: the old button grid was 246 px tall in
+   an iPhone 13's 390 px landscape window (63% of the screen), and the only
+   spec that asserted fit ran at 1280x720, where fitting is trivial. */
+:root { --safe-l: 0px; --safe-r: 0px; --safe-t: 0px; --safe-b: 0px; }
+
 #touch { position: fixed; inset: 0; z-index: 12; pointer-events: none;
   font-family: var(--font-mono); user-select: none; -webkit-user-select: none; }
 #touch[hidden] { display: none; }
 body:not(.playing) #touch { display: none; }
 
-#touch #t-stick, #touch .t-b {
+#touch #t-stick, #touch #t-swing, #touch .t-b {
   pointer-events: auto; touch-action: none; -webkit-tap-highlight-color: transparent; }
 
-#t-stick { position: absolute; left: calc(22px + env(safe-area-inset-left));
-  bottom: calc(22px + env(safe-area-inset-bottom)); width: 132px; height: 132px;
+/* ── the two ZONES ──────────────────────────────────────────────────────────
+   Not buttons: half-screen surfaces with the visible ring/pill as a child.
+   A phone has no second stick, and the controls sit above the canvas, so the
+   canvas look-drag was unreachable and there was no camera input at all. The
+   fix is one dual-purpose control (the Wild Rift / Diablo Immortal shape):
+   press the right zone to swing, slide past a dead zone to look, lift to
+   release — see js/game/touch.js rule 4.
+
+   The right zone stops 24 px short of the physical edge. Safari's
+   edge-swipe-back is an OS gesture that `touch-action` cannot prevent, so the
+   only defence is not putting a control under it. */
+#t-stick { position: absolute; left: 0; top: 0; width: 50%; height: 100%; }
+#t-swing { position: absolute; top: 0; bottom: 0; left: 50%;
+  right: calc(24px + env(safe-area-inset-right) + var(--safe-r)); }
+
+/* The ring follows the thumb: the pad is now the whole left half, so a fixed
+   ring would sit a hand's width from the thumb apparently pushing it. JS sets
+   left/top to the landing point; the negative margin centres it there. */
+#t-ring { position: absolute; left: calc(88px + env(safe-area-inset-left) + var(--safe-l));
+  top: calc(100% - 88px - env(safe-area-inset-bottom) - var(--safe-b));
+  width: 132px; height: 132px; margin: -66px 0 0 -66px;
   border-radius: 50%; background: rgba(232, 232, 242, 0.06);
-  border: 1px solid rgba(232, 232, 242, 0.16); display: grid; place-items: center; }
+  border: 1px solid rgba(232, 232, 242, 0.16); display: grid; place-items: center;
+  opacity: 0.5; transition: opacity 120ms; pointer-events: none; }
+#t-ring.on { opacity: 1; }
 #t-knob { width: 56px; height: 56px; border-radius: 50%;
   background: rgba(232, 232, 242, 0.22); border: 1px solid rgba(232, 232, 242, 0.34);
   will-change: transform; }
 
-#t-btns { position: absolute; right: calc(22px + env(safe-area-inset-right));
-  bottom: calc(22px + env(safe-area-inset-bottom));
-  display: grid; grid-template-columns: repeat(2, auto); gap: 12px; align-items: end;
-  justify-items: end; }
-.t-b { font: 700 12px/1 var(--font-mono); letter-spacing: 0.08em; color: var(--ink);
+/* SWING is held for most of the game, so its pill stays big and stays under
+   the right thumb's resting arc — the zone around it is what changed. */
+.t-pill { position: absolute; right: 22px;
+  bottom: calc(22px + env(safe-area-inset-bottom) + var(--safe-b));
+  width: 104px; height: 104px; border-radius: 50%; display: grid; place-items: center;
+  font: 700 14px/1 var(--font-mono); letter-spacing: 0.08em; color: var(--ink);
+  background: rgba(224, 38, 60, 0.28); border: 1px solid rgba(224, 38, 60, 0.6);
+  pointer-events: none; }
+#t-swing.on .t-pill { background: rgba(224, 38, 60, 0.55); border-color: var(--accent); }
+
+/* The edge buttons are taps, not holds, so they can be small and out of the
+   thumbs' way. Docked top-right as a narrow column — the old bottom-right grid
+   was three 74 px rows plus the big pill, 190x246 px, which is 63% of an
+   iPhone 13's landscape height sat where the player is looking. A 56 px column
+   at the far edge clears the whole centre of the view (asserted), and the
+   right index finger reaches it in a claw grip without the thumb leaving
+   SWING. They overlap the SWING zone and win the hit test by being later
+   siblings — no hit-test exclusion is written anywhere. */
+#t-btns { position: absolute; top: calc(14px + env(safe-area-inset-top) + var(--safe-t));
+  right: calc(14px + env(safe-area-inset-right) + var(--safe-r));
+  display: flex; flex-direction: column; gap: 10px; }
+.t-b { font: 700 10px/1 var(--font-mono); letter-spacing: 0.06em; color: var(--ink);
   background: rgba(7, 7, 13, 0.5); border: 1px solid rgba(232, 232, 242, 0.22);
-  border-radius: 50%; width: 74px; height: 74px; display: grid; place-items: center;
+  border-radius: 50%; width: 56px; height: 56px; display: grid; place-items: center;
   padding: 0; }
 .t-b.on { background: rgba(224, 38, 60, 0.55); border-color: var(--accent); }
-/* SWING is the button held for most of the game, so it is the big one and it
-   sits under the right thumb's resting arc. */
-.t-b.t-big { width: 104px; height: 104px; font-size: 14px;
-  background: rgba(224, 38, 60, 0.28); border-color: rgba(224, 38, 60, 0.6);
-  grid-column: 2; grid-row: 1 / span 2; align-self: end; }
-#t-zip { grid-column: 1; grid-row: 1; }
-#t-jump { grid-column: 1; grid-row: 2; }
-#t-dive { grid-column: 1; grid-row: 3; }
+
+/* The Add-to-Home-Screen hint (js/game/touch.js decides when). Lives on the
+   title screen, above the play button's reach, and is dismissible for good. */
+#a2hs { color: var(--ink-dim); font: 12px/1.5 var(--font-mono); text-align: center;
+  background: rgba(7, 7, 13, 0.6); border: 1px solid var(--line); border-radius: 8px;
+  padding: 8px 12px; max-width: 44ch; }
+#a2hs[hidden] { display: none; }
+#a2hs b { color: var(--ink); }
+#a2hs button { background: none; border: 0; color: var(--ink-dim); font: 16px/1 var(--font-mono);
+  padding: 0 0 0 8px; cursor: pointer; }
 
 /* A phone in portrait gets a fraction of the useful field of view, and the
    controls crowd the play area. Ask for landscape rather than trying to

@@ -65,8 +65,28 @@ computed and discarded: per-building OBBs in a spatial hash, with `raycast`
 constraint method — integrate under gravity and air steer, clamp the position to
 the tether sphere, re-derive velocity from positions — plus a pump, a
 ground-clearance auto-shorten, an apex auto-release, a stall guard and a
-never-stranded anchor assist. Measured: **42 m/s sustained cruise, 2.5 km per
-minute**, arcs a little over 3 s including air time between them.
+never-stranded anchor assist.
+
+**The cruise numbers this paragraph used to claim — 42 m/s and 2.5 km/min — are
+wrong.** Re-measured in bare Node over a 60 s held swing: **27.2 m/s median
+(p90 73.1) and 1.83 km/min**, with a median 0.95 s between attaches. And a
+single figure is misleading anyway, because the same physics produces three
+different games depending on where you start:
+
+| district | share of buildings | attached | swings/min | distance |
+|---|---|---|---|---|
+| midtown (r<0.45) | 9% | 25% | 24 | **3.56 km/min** |
+| commercial | 31% | 57% | 34 | 2.43 km/min |
+| low-rise | **60%** | 89% | **137** | **0.25 km/min** |
+
+Low-rise is a swing every 0.44 s at 13 m — hopping that covers no ground.
+Midtown is long ballistic arcs between rare anchors, and is roughly twice the
+reference game's community-measured pace. Neither is a continuous rhythmic arc,
+and the majority of the map produces the worse one. **The root cause is anchor
+availability, not the constraint** — it dies by ~80 m even in midtown and by
+25 m across the low-rise majority — so the primary lever is the city, and
+`ASSIST_Y` is currently not a safety net but the *primary anchor source* over
+most of the map.
 
 **Renderer.** Ported near-verbatim and converted to modules by script. The
 driver (`js/game.js`) is ~430 lines: fixed 1/60 loop with render interpolation

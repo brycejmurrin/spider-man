@@ -37,10 +37,19 @@ const PAD = 1.4, MIN_D = 2.8, HARD_D = 0.9;
    Four raycasts a frame against a spatial hash costs nothing measurable. */
 const CANDS = [[1, 1, 1], [1, 1, -1], [0.7, 2.0, 1], [0.35, 3.2, 0]];
 
+/* Seconds the auto-recentre stays suspended after the last look input. Long
+   enough that a thumb pausing mid-slide does not lose its framing, short
+   enough that letting go returns the camera behind the arc before the next
+   anchor. Auto-centring is the most-complained-about camera behaviour in the
+   medium, and the complaint is always the same one: it overrides a player who
+   is looking somewhere on purpose. This is what makes that impossible. */
+const RECENTRE_TAIL = 1.2;
+
 export function createCameras(colliders) {
   const eye = [0, 40, -60], tgt = [0, 20, 0];
   let fov = 62, roll = 0, shake = 0, slipSm = 0;
   let orbitYaw = 0, orbitPitch = 0;    // player-drag offsets on the chase rig
+  let holdT = 0;                       // seconds of recentre suspension left
   let modeIdx = 0;
 
   /* solveEye(subject chest, desired eye, out) -> room
@@ -140,6 +149,18 @@ export function createCameras(colliders) {
     get roll() { return roll; },
     get mode() { return CAM_MODES[modeIdx].id; },
     get modeIndex() { return modeIdx; },
+    // Exposed so the orbit is observable at all. Every touch-camera assertion
+    // reduces to "did orbitYaw move", and before this nothing outside the
+    // closure could see it.
+    get orbitYaw() { return orbitYaw; },
+    get orbitPitch() { return orbitPitch; },
+    /* setRecentreHold(on) — suspend the auto-recentre while the player is
+       deliberately framing, plus a tail. Without it the recentre wins: at
+       cruise its lambda is 1.6 s^-1, which decays a hand-made offset to 37% in
+       0.63 s, so a thumb that stops sliding for half a second loses the shot
+       it just framed. The tail is a decay clock rather than a timestamp
+       because this module must stay runnable in bare Node. */
+    setRecentreHold(on) { if (on) holdT = RECENTRE_TAIL; return holdT > 0; },
     setMode(id) {
       const i = CAM_MODES.findIndex((m) => m.id === id);
       if (i < 0) return false;
@@ -155,8 +176,12 @@ export function createCameras(colliders) {
     /* tick(sub, dt) — solve + damp into eye/tgt/fov/roll. */
     tick(sub, dt) {
       const v = vantage(sub, CAM_MODES[modeIdx].id);
-      // recentre the orbit while moving (holds still when parked/aiming)
-      const rec = Math.min(1, sub.speed / 12) * 1.6;
+      // Recentre the orbit while moving — unless the player is framing. The
+      // old comment here claimed it "holds still when parked/aiming"; nothing
+      // in the code set a parked or aiming state, so a held aim was impossible
+      // by construction, on every platform.
+      if (holdT > 0) holdT = Math.max(0, holdT - dt);
+      const rec = holdT > 0 ? 0 : Math.min(1, sub.speed / 12) * 1.6;
       orbitYaw = damp(orbitYaw, 0, rec, dt);
       orbitPitch = damp(orbitPitch, 0, rec * 0.6, dt);
       // decoupled lambdas: eye lags more than the look-at (the Apex trick)

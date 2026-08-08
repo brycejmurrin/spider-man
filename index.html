@@ -12,8 +12,8 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 <link rel="icon" type="image/png" href="icons/icon-180.png">
-<link rel="stylesheet" href="css/tokens.css?v=5">
-<link rel="stylesheet" href="css/game.css?v=5">
+<link rel="stylesheet" href="css/tokens.css?v=6">
+<link rel="stylesheet" href="css/game.css?v=6">
 <script>// ── SHELL VERSION GUARD ──────────────────────────────────────────────────────
 // index.html is the ONE file with no ?v= cache-buster on itself, so an installed
 // PWA / home-screen shell can go stale (new JS/CSS load, but old HTML markup).
@@ -110,9 +110,16 @@
     <b>X</b> dive · <b>C</b> camera · <b>DRAG</b> look · <b>ESC</b> pause · <b>M</b> music · <b>N</b> next track
   </div>
   <div class="keys" id="keys-touch">
-    <b>STICK</b> move · hold <b>SWING</b> · <b>JUMP</b> · <b>ZIP</b> · <b>DIVE</b><br>
-    drag anywhere else to look
+    left half <b>STICK</b> · right half hold <b>SWING</b>, <b>SLIDE TO LOOK</b><br>
+    <b>JUMP</b> · <b>ZIP</b> · <b>DIVE</b> top right
   </div>
+  <!-- iOS removed the Fullscreen API from iPhone entirely, so the address bar
+       stays and the edge-swipe-back keeps competing with the right-hand zone.
+       Installing is the only fix, and the shell already ships the manifest and
+       apple-mobile-web-app-capable for it. Shown by js/game/touch.js only on
+       iOS Safari outside standalone mode. -->
+  <div id="a2hs" hidden>Add to Home Screen for fullscreen — <b>Share</b> → <b>Add to Home Screen</b>
+    <button id="a2hs-x" type="button" aria-label="dismiss">×</button></div>
 </div>
 
 <dialog id="pausemenu" class="screen dim" data-esc-close="pm-resume" hidden>
@@ -129,69 +136,69 @@
 <script type="importmap">
 {
   "imports": {
-    "./js/log.js": "./js/log.js?v=5",
-    "./js/mat4.js": "./js/mat4.js?v=5",
-    "./js/render/shaders/chunks.js": "./js/render/shaders/chunks.js?v=5",
-    "./js/render/shaders/lit.js": "./js/render/shaders/lit.js?v=5",
-    "./js/render/shaders/sky.js": "./js/render/shaders/sky.js?v=5",
-    "./js/render/shaders/fx.js": "./js/render/shaders/fx.js?v=5",
-    "./js/render/shaders/post.js": "./js/render/shaders/post.js?v=5",
-    "./js/render/glx/post.js": "./js/render/glx/post.js?v=5",
-    "./js/render/glx/shadow.js": "./js/render/glx/shadow.js?v=5",
-    "./js/render/glx/chunked.js": "./js/render/glx/chunked.js?v=5",
-    "./js/render/glx.js": "./js/render/glx.js?v=5",
-    "./js/render/assets.js": "./js/render/assets.js?v=5",
-    "./js/city/geom.js": "./js/city/geom.js?v=5",
-    "./js/city/graph.js": "./js/city/graph.js?v=5",
-    "./js/city/city-data.js": "./js/city/city-data.js?v=5",
-    "./js/city/buildings.js": "./js/city/buildings.js?v=5",
-    "./js/city/colliders.js": "./js/city/colliders.js?v=5",
-    "./js/city/citygen.js": "./js/city/citygen.js?v=5",
-    "./js/hero/hero3d.js": "./js/hero/hero3d.js?v=5",
-    "./js/game/store.js": "./js/game/store.js?v=5",
-    "./js/game/hero-consts.js": "./js/game/hero-consts.js?v=5",
-    "./js/game/hero.js": "./js/game/hero.js?v=5",
-    "./js/game/webline.js": "./js/game/webline.js?v=5",
-    "./js/game/cameras.js": "./js/game/cameras.js?v=5",
-    "./js/game/touch.js": "./js/game/touch.js?v=5",
-    "./js/game/input.js": "./js/game/input.js?v=5",
-    "./js/game/hud.js": "./js/game/hud.js?v=5",
-    "./js/game/audio.js": "./js/game/audio.js?v=5",
-    "./js/game/spidey-api.js": "./js/game/spidey-api.js?v=5",
-    "./js/game.js": "./js/game.js?v=5"
+    "./js/log.js": "./js/log.js?v=6",
+    "./js/mat4.js": "./js/mat4.js?v=6",
+    "./js/render/shaders/chunks.js": "./js/render/shaders/chunks.js?v=6",
+    "./js/render/shaders/lit.js": "./js/render/shaders/lit.js?v=6",
+    "./js/render/shaders/sky.js": "./js/render/shaders/sky.js?v=6",
+    "./js/render/shaders/fx.js": "./js/render/shaders/fx.js?v=6",
+    "./js/render/shaders/post.js": "./js/render/shaders/post.js?v=6",
+    "./js/render/glx/post.js": "./js/render/glx/post.js?v=6",
+    "./js/render/glx/shadow.js": "./js/render/glx/shadow.js?v=6",
+    "./js/render/glx/chunked.js": "./js/render/glx/chunked.js?v=6",
+    "./js/render/glx.js": "./js/render/glx.js?v=6",
+    "./js/render/assets.js": "./js/render/assets.js?v=6",
+    "./js/city/geom.js": "./js/city/geom.js?v=6",
+    "./js/city/graph.js": "./js/city/graph.js?v=6",
+    "./js/city/city-data.js": "./js/city/city-data.js?v=6",
+    "./js/city/buildings.js": "./js/city/buildings.js?v=6",
+    "./js/city/colliders.js": "./js/city/colliders.js?v=6",
+    "./js/city/citygen.js": "./js/city/citygen.js?v=6",
+    "./js/hero/hero3d.js": "./js/hero/hero3d.js?v=6",
+    "./js/game/store.js": "./js/game/store.js?v=6",
+    "./js/game/hero-consts.js": "./js/game/hero-consts.js?v=6",
+    "./js/game/hero.js": "./js/game/hero.js?v=6",
+    "./js/game/webline.js": "./js/game/webline.js?v=6",
+    "./js/game/cameras.js": "./js/game/cameras.js?v=6",
+    "./js/game/touch.js": "./js/game/touch.js?v=6",
+    "./js/game/input.js": "./js/game/input.js?v=6",
+    "./js/game/hud.js": "./js/game/hud.js?v=6",
+    "./js/game/audio.js": "./js/game/audio.js?v=6",
+    "./js/game/spidey-api.js": "./js/game/spidey-api.js?v=6",
+    "./js/game.js": "./js/game.js?v=6"
   }
 }
 </script>
-<link rel="modulepreload" href="js/log.js?v=5">
-<link rel="modulepreload" href="js/mat4.js?v=5">
-<link rel="modulepreload" href="js/render/shaders/chunks.js?v=5">
-<link rel="modulepreload" href="js/render/shaders/lit.js?v=5">
-<link rel="modulepreload" href="js/render/shaders/sky.js?v=5">
-<link rel="modulepreload" href="js/render/shaders/fx.js?v=5">
-<link rel="modulepreload" href="js/render/shaders/post.js?v=5">
-<link rel="modulepreload" href="js/render/glx/post.js?v=5">
-<link rel="modulepreload" href="js/render/glx/shadow.js?v=5">
-<link rel="modulepreload" href="js/render/glx/chunked.js?v=5">
-<link rel="modulepreload" href="js/render/glx.js?v=5">
-<link rel="modulepreload" href="js/render/assets.js?v=5">
-<link rel="modulepreload" href="js/city/geom.js?v=5">
-<link rel="modulepreload" href="js/city/graph.js?v=5">
-<link rel="modulepreload" href="js/city/city-data.js?v=5">
-<link rel="modulepreload" href="js/city/buildings.js?v=5">
-<link rel="modulepreload" href="js/city/colliders.js?v=5">
-<link rel="modulepreload" href="js/city/citygen.js?v=5">
-<link rel="modulepreload" href="js/hero/hero3d.js?v=5">
-<link rel="modulepreload" href="js/game/store.js?v=5">
-<link rel="modulepreload" href="js/game/hero-consts.js?v=5">
-<link rel="modulepreload" href="js/game/hero.js?v=5">
-<link rel="modulepreload" href="js/game/webline.js?v=5">
-<link rel="modulepreload" href="js/game/cameras.js?v=5">
-<link rel="modulepreload" href="js/game/touch.js?v=5">
-<link rel="modulepreload" href="js/game/input.js?v=5">
-<link rel="modulepreload" href="js/game/hud.js?v=5">
-<link rel="modulepreload" href="js/game/audio.js?v=5">
-<link rel="modulepreload" href="js/game/spidey-api.js?v=5">
-<link rel="modulepreload" href="js/game.js?v=5">
-<script type="module" src="js/game.js?v=5"></script>
+<link rel="modulepreload" href="js/log.js?v=6">
+<link rel="modulepreload" href="js/mat4.js?v=6">
+<link rel="modulepreload" href="js/render/shaders/chunks.js?v=6">
+<link rel="modulepreload" href="js/render/shaders/lit.js?v=6">
+<link rel="modulepreload" href="js/render/shaders/sky.js?v=6">
+<link rel="modulepreload" href="js/render/shaders/fx.js?v=6">
+<link rel="modulepreload" href="js/render/shaders/post.js?v=6">
+<link rel="modulepreload" href="js/render/glx/post.js?v=6">
+<link rel="modulepreload" href="js/render/glx/shadow.js?v=6">
+<link rel="modulepreload" href="js/render/glx/chunked.js?v=6">
+<link rel="modulepreload" href="js/render/glx.js?v=6">
+<link rel="modulepreload" href="js/render/assets.js?v=6">
+<link rel="modulepreload" href="js/city/geom.js?v=6">
+<link rel="modulepreload" href="js/city/graph.js?v=6">
+<link rel="modulepreload" href="js/city/city-data.js?v=6">
+<link rel="modulepreload" href="js/city/buildings.js?v=6">
+<link rel="modulepreload" href="js/city/colliders.js?v=6">
+<link rel="modulepreload" href="js/city/citygen.js?v=6">
+<link rel="modulepreload" href="js/hero/hero3d.js?v=6">
+<link rel="modulepreload" href="js/game/store.js?v=6">
+<link rel="modulepreload" href="js/game/hero-consts.js?v=6">
+<link rel="modulepreload" href="js/game/hero.js?v=6">
+<link rel="modulepreload" href="js/game/webline.js?v=6">
+<link rel="modulepreload" href="js/game/cameras.js?v=6">
+<link rel="modulepreload" href="js/game/touch.js?v=6">
+<link rel="modulepreload" href="js/game/input.js?v=6">
+<link rel="modulepreload" href="js/game/hud.js?v=6">
+<link rel="modulepreload" href="js/game/audio.js?v=6">
+<link rel="modulepreload" href="js/game/spidey-api.js?v=6">
+<link rel="modulepreload" href="js/game.js?v=6">
+<script type="module" src="js/game.js?v=6"></script>
 </body>
 </html>

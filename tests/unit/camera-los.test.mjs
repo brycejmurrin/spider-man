@@ -131,3 +131,40 @@ test("the solved vantage is always finite and above the street", () => {
   }
   assert.deepEqual(bad, []);
 });
+
+/* The recentre gate, which is the half of the touch-camera fix that lives in
+ * this module. Before it, `rec = min(1, speed/12) * 1.6` ran unconditionally:
+ * at cruise that decays a hand-made orbit offset to 37% in 0.63 s, so a player
+ * framing a shot lost it the moment they stopped sliding. The comment in the
+ * code claimed it "holds still when parked/aiming" and nothing anywhere set a
+ * parked or aiming state, so a held aim was impossible by construction.
+ *
+ * Asserted RELATIVELY — holds while held, decays after — never against the
+ * lambda or the tail length, both of which are tuning values.
+ */
+test("the camera's auto-recentre yields while the player is framing", () => {
+  const cams = createCameras(city.colliders);
+  const sub = { p: [8, 60, -520], v: [0, 0, 40], head: 0, speed: 40, state: "swing" };
+
+  // Baseline: no hold. The offset must wash out — this is the behaviour that
+  // makes the camera follow the arc, and it has to survive the fix.
+  cams.orbit(200, 0);
+  const free0 = cams.orbitYaw;
+  for (let i = 0; i < 30; i++) cams.tick(sub, 1 / 60);
+  const free = cams.orbitYaw;
+  assert.ok(Math.abs(free) < Math.abs(free0) * 0.75,
+    `an un-held orbit did not recentre: ${free0.toFixed(3)} -> ${free.toFixed(3)}`);
+
+  // Held: the same half second of travel, with a finger down.
+  const cams2 = createCameras(city.colliders);
+  cams2.orbit(200, 0);
+  const held0 = cams2.orbitYaw;
+  for (let i = 0; i < 30; i++) { cams2.setRecentreHold(true); cams2.tick(sub, 1 / 60); }
+  assert.equal(cams2.orbitYaw, held0, "the recentre moved the orbit while the player was framing");
+
+  // And it is a hold, not an off switch: releasing must hand the camera back.
+  // The tail outlives a single frame on purpose, so step past it.
+  for (let i = 0; i < 240; i++) cams2.tick(sub, 1 / 60);
+  assert.ok(Math.abs(cams2.orbitYaw) < Math.abs(held0) * 0.75,
+    `the orbit never recentred after release: ${held0.toFixed(3)} -> ${cams2.orbitYaw.toFixed(3)}`);
+});

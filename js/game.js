@@ -255,6 +255,7 @@ import { createApi } from "./game/spidey-api.js";
     } else if (!frozen) {
       const [ldx, ldy] = Input.look();
       if (ldx || ldy) cams.orbit(ldx, ldy);
+      cams.setRecentreHold(Input.lookHeld());
       cams.tick(sub, dt);
     }
 

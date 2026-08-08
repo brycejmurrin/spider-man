@@ -95,6 +95,7 @@ js/game/            — gameplay —
   webline.js        the active web ribbon
   cameras.js        one pure vantage() solver + damping + shake + geometry clamp
   input.js          keyboard / mouse-look / gamepad; edge latches
+  touch.js          the two touch ZONES: left stick, right SWING+LOOK
   hud.js            write-cached DOM HUD
   audio.js          WebAudio: wind, thwip, landing, UI
   store.js          cached localStorage (`spidey.` prefix)
@@ -165,6 +166,10 @@ __spidey.info(); __spidey.play(); __spidey.park(0.5); __spidey.freeze(true)
 __spidey.place(x, y, z, speed, head); __spidey.reset(frac, y, speed)
 __spidey.headless(true); __spidey.obs(); __spidey.act(input, dt, n); __spidey.step(dt, n)
 __spidey.camera("chase"); __spidey.cameraModes(); __spidey.snapCam(); __spidey.camState()
+                                     // camState carries orbitYaw/orbitPitch —
+                                     // every touch-camera assertion is "did
+                                     // orbitYaw move", and nothing outside the
+                                     // closure could see it before
 __spidey.city(); __spidey.swing(); __spidey.groundY(x, z); __spidey.raycast(o, d, maxT)
 __spidey.nearGeometry(pt, r)         // "is this point ON a building?" — see below
 __spidey.input()                     // the MERGED input the loop is about to read
@@ -187,7 +192,38 @@ fails to reach the hero, the DOM handler may never have fired, the merge may
 have dropped it, or the hero may have ignored it — one symptom, three causes.
 It reports only non-consuming sources: the consume-once edges (jump/zip/camera)
 and `look()` are deliberately absent, because reading them here would eat an
-input the game is owed.
+input the game is owed. `lookHeld` is reported because it is a *state*, not an
+edge — see below.
+
+**Touch is TWO ZONES, and the right one is dual-purpose.** The left half is the
+stick (origin where the thumb landed, ring follows it); the right half is
+SWING, and a slide past a 24 px dead zone steers the camera *without releasing
+the swing*. That exists because of a consequence of the controls-above-canvas
+rule nobody had traced: both thumbs are on controls, and the only thing feeding
+`Input.look()` was a pointer drag ON the canvas — so a phone had **no camera
+input at any time**, and the view could only be steered indirectly by pushing
+the stick and waiting for the auto-recentre. The dead zone is what stops a
+thumb that rolls on press from yanking the view.
+
+The camera's auto-recentre must yield while the player is framing
+(`cams.setRecentreHold`, fed by `Input.lookHeld()`): at cruise its lambda is
+1.6 s⁻¹, which decays a hand-made offset to 37% in 0.63 s. It has to be a state
+and not a delta, because a thumb holding a steady offset produces no deltas and
+is indistinguishable from nobody touching the glass.
+
+**`releaseAll()` must go through the `hold()` closures, never around them.** It
+used to clear the shared `state` directly while each closure kept its own
+`id` — so after a blur, app-switch or `touchcancel` the stale pointerId stayed
+forever, `pointerdown`'s `if (id != null) return` rejected every later press,
+and SWING was dead until a page reload. iOS never reuses pointerIds, so nothing
+could clear it. `release()` is now total and idempotent for the same reason.
+
+**Safe-area insets are `env(...) + var(--safe-*)`, not `env(..., fallback)`.**
+The fallback form looks equivalent and is not: it applies only where `env()` is
+*unsupported*, and Chromium supports it and reports 0 — so a headless test
+could never see a real phone's 47 px inset. Adding the two lets a spec inject
+`--safe-l: 47px` and assert the real budget while an iPhone gets the real
+value.
 
 **`music()` exists because every other music signal is a false positive.** The
 `<audio>` elements are detached (`new Audio()`, never appended) so the DOM

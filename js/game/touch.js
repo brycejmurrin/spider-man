@@ -1,7 +1,7 @@
 /* Web-Slinger — touch controls. Without these the game is unplayable on a
    phone: every action is a key, and iOS Safari has no keys.
 
-   Three rules, each the fix for a way virtual controls usually break:
+   Four rules, each the fix for a way virtual controls usually break:
 
    1. EVERY control tracks its own pointerId. A phone hand is three or four
       simultaneous pointers — thumb on the stick, thumb on SWING, a palm
@@ -19,16 +19,34 @@
       screens must still scroll on a small phone, and a blanket
       `touch-action: none` kills that too.
 
+   4. THE CONTROLS ARE ZONES, NOT BUTTONS, AND SWING ALSO CARRIES THE CAMERA.
+      Rule 2 has a consequence nobody had traced: both thumbs are on controls,
+      the controls are above the canvas, and the only source feeding
+      `Input.look()` was a pointer drag ON the canvas — so on a phone there was
+      no camera input at all, at any time. The player could only steer
+      indirectly, by pushing the stick and waiting for the auto-recentre to
+      swing the view round behind the new velocity.
+
+      The answer shipped mobile games converged on is one dual-purpose control
+      (Wild Rift's ability buttons, Diablo Immortal's skills): press = the
+      action, slide past a dead zone = the camera, lift = release. So each half
+      of the screen is one big invisible zone with the visible ring/pill drawn
+      as a child, and a slide on the SWING zone moves the camera WITHOUT ever
+      clearing the hold. The dead zone is what stops a thumb that rolls on
+      press from yanking the view.
+
    No DOM at module eval — like input.js, everything wires inside create(), so
    the module stays importable in bare Node. */
 
 /* Held state, read by input.js each frame. The stick is already normalised to
    the -1..1 the keyboard path produces, so the consumers below it need no
-   knowledge of where the value came from. */
+   knowledge of where the value came from. lookDX/lookDY are ACCUMULATED pixel
+   deltas drained by Input.look(), exactly like the mouse path's. */
 const state = {
   active: false,        // controls are mounted and visible
   moveX: 0, moveZ: 0,
   swing: false, dive: false,
+  lookDX: 0, lookDY: 0, lookHeld: false,
   jumpEdge: false, zipEdge: false, camEdge: false,
 };
 
@@ -46,6 +64,39 @@ function wantTouch(forced) {
 
 const STICK_R = 52;      // px from stick centre for full deflection
 const DEAD = 0.16;       // fraction of STICK_R ignored, so a resting thumb is neutral
+/* px of accumulated travel before a press on the SWING zone starts steering the
+   camera. A thumb rolls a few px as it presses, and without this every swing
+   would come with a small involuntary camera yank. Wild Rift ships this as a
+   player-tunable slider and describes it in exactly those terms; 24 px is a
+   starting value, not a measured one. */
+const LOOK_DEAD = 24;
+
+/* The Fullscreen API was removed from iPhone entirely (iPadOS keeps a prefixed
+   version), so a browser tab cannot hide the address bar and cannot stop
+   Safari's edge-swipe-back from competing with the right-hand SWING zone.
+   Installing to the Home Screen is the only mechanism that fixes both, and the
+   shell already ships the manifest and apple-mobile-web-app-capable — so this
+   is the largest free win available on the platform and it costs a hint.
+   Suppressed once dismissed, and never shown when already standalone. */
+function offerInstall() {
+  const el = document.getElementById("a2hs");
+  if (!el) return;
+  const standalone = window.navigator.standalone === true ||
+    (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
+  // iOS Safari only: no other browser has this failure, and Chrome/Android has
+  // a real install prompt rather than a Share-sheet ritual to describe.
+  const ios = /iP(hone|ad|od)/.test(navigator.platform || "") ||
+    (navigator.maxTouchPoints > 1 && /Mac/.test(navigator.platform || ""));
+  let hidden = false;
+  try { hidden = localStorage.getItem("spidey.a2hs") === "off"; } catch (_) {}
+  if (standalone || !ios || hidden) return;
+  el.hidden = false;
+  const x = document.getElementById("a2hs-x");
+  if (x) x.addEventListener("click", () => {
+    el.hidden = true;
+    try { localStorage.setItem("spidey.a2hs", "off"); } catch (_) {}
+  });
+}
 
 export const Touch = {
   state,
@@ -58,29 +109,39 @@ export const Touch = {
 
     const layer = document.createElement("div");
     layer.id = "touch";
+    // #t-btns is LAST on purpose: it overlaps the SWING zone, and in the same
+    // stacking context the later sibling wins the hit test. A press on ZIP is
+    // a zip, not a swing, and no hit-test exclusion is written anywhere.
     layer.innerHTML =
-      '<div id="t-stick"><div id="t-knob"></div></div>' +
+      '<div id="t-stick"><div id="t-ring"><div id="t-knob"></div></div></div>' +
+      '<div id="t-swing"><div class="t-pill">SWING</div></div>' +
       '<div id="t-btns">' +
       '<button id="t-zip" class="t-b" type="button">ZIP</button>' +
       '<button id="t-jump" class="t-b" type="button">JUMP</button>' +
       '<button id="t-dive" class="t-b" type="button">DIVE</button>' +
-      '<button id="t-swing" class="t-b t-big" type="button">SWING</button>' +
       "</div>";
     root.appendChild(layer);
 
     const stick = layer.querySelector("#t-stick");
+    const ring = layer.querySelector("#t-ring");
     const knob = layer.querySelector("#t-knob");
 
     // ── the stick ──────────────────────────────────────────────────────────
     // Origin is where the thumb LANDED, not the centre of the pad: a thumb
     // that lands off-centre would otherwise start the hero at a hard walk in
-    // whatever direction the offset happened to be.
+    // whatever direction the offset happened to be. Now that the pad is the
+    // whole left half, the visible ring MOVES to the landing point too —
+    // otherwise the thumb and the thing it is apparently pushing are metres
+    // apart on screen.
     let stickId = null, ox = 0, oy = 0;
     const setKnob = (dx, dy) => { knob.style.transform = `translate(${dx}px, ${dy}px)`; };
 
     stick.addEventListener("pointerdown", (e) => {
       if (stickId != null) return;
       stickId = e.pointerId; ox = e.clientX; oy = e.clientY;
+      // The layer is position:fixed inset:0, so client coords ARE layer coords.
+      ring.style.left = `${e.clientX}px`; ring.style.top = `${e.clientY}px`;
+      ring.classList.add("on");
       try { stick.setPointerCapture(e.pointerId); } catch (_) {}
       e.preventDefault();
     });
@@ -97,6 +158,7 @@ export const Touch = {
     const stickEnd = (e) => {
       if (e.pointerId !== stickId) return;
       stickId = null; state.moveX = 0; state.moveZ = 0; setKnob(0, 0);
+      ring.classList.remove("on");
     };
     stick.addEventListener("pointerup", stickEnd);
     stick.addEventListener("pointercancel", stickEnd);
@@ -106,17 +168,42 @@ export const Touch = {
     // A HOLD button owns its pointer for the same reason the stick does. An
     // EDGE button sets its latch on press and is consumed by the game loop.
     const holds = [];                 // every hold button, for the safety nets
-    const hold = (el, key) => {
-      let id = null;
+    /* hold(el, key, look) — press-and-hold. `look` makes it dual-purpose: the
+       same press also steers the camera once the thumb has travelled past
+       LOOK_DEAD, and the hold is never cleared by movement. */
+    const hold = (el, key, look) => {
+      let id = null, lx = 0, ly = 0, travel = 0;
       el.addEventListener("pointerdown", (e) => {
         if (id != null) return;
         id = e.pointerId; state[key] = true; el.classList.add("on");
+        lx = e.clientX; ly = e.clientY; travel = 0;
+        if (look) state.lookHeld = true;
         try { el.setPointerCapture(e.pointerId); } catch (_) {}
         e.preventDefault();
       });
+      if (look) {
+        el.addEventListener("pointermove", (e) => {
+          if (e.pointerId !== id) return;
+          const dx = e.clientX - lx, dy = e.clientY - ly;
+          lx = e.clientX; ly = e.clientY;
+          travel += Math.hypot(dx, dy);
+          // Note what is NOT here: any clearing of state[key]. A slide is a
+          // look, not a cancel — the player is holding a swing and framing it.
+          if (travel >= LOOK_DEAD) { state.lookDX += dx; state.lookDY += dy; }
+          e.preventDefault();
+        });
+      }
+      // Total and idempotent on purpose. This used to early-return when `id`
+      // was already null, which read as harmless and was not: releaseAll()
+      // below cleared `state` but could not reach this closure's `id`, so
+      // after a blur / app-switch / touchcancel the id stayed at the stale
+      // pointer forever, `pointerdown`'s `if (id != null) return` rejected
+      // EVERY later press, and SWING was dead until a page reload. iOS never
+      // reuses pointerIds, so nothing could ever clear it. releaseAll now
+      // calls this, and this now always clears.
       const release = () => {
-        if (id == null) return;
         id = null; state[key] = false; el.classList.remove("on");
+        if (look) state.lookHeld = false;
       };
       const off = (e) => { if (e.pointerId === id) release(); };
       el.addEventListener("pointerup", off);
@@ -132,7 +219,7 @@ export const Touch = {
       });
     };
 
-    hold(layer.querySelector("#t-swing"), "swing");
+    hold(layer.querySelector("#t-swing"), "swing", true);
     hold(layer.querySelector("#t-dive"), "dive");
     edge(layer.querySelector("#t-jump"), "jumpEdge");
     edge(layer.querySelector("#t-zip"), "zipEdge");
@@ -143,8 +230,10 @@ export const Touch = {
     // net is not enough, and each of these covers a case the others cannot.
     // Ported from Apex 26's input.js, which found them the hard way.
     const releaseAll = () => {
-      state.swing = state.dive = false;
+      // Through the closures, NOT around them — see the note on release().
+      for (const h of holds) h.release();
       state.moveX = state.moveZ = 0; stickId = null; setKnob(0, 0);
+      state.lookDX = state.lookDY = 0; state.lookHeld = false;
       layer.querySelectorAll(".on").forEach((el) => el.classList.remove("on"));
     };
 
@@ -179,6 +268,7 @@ export const Touch = {
     document.addEventListener("visibilitychange", () => { if (document.hidden) releaseAll(); });
 
     state.active = true;
+    offerInstall();
     return true;
   },
 

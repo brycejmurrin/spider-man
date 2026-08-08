@@ -98,13 +98,23 @@ export const Input = {
     return keys.has("ControlLeft") || keys.has("KeyX") || Touch.state.dive ||
       !!(g && g.buttons[6] && g.buttons[6].pressed);
   },
-  look() {    // consumed mouse/right-stick deltas
+  look() {    // consumed mouse/touch/right-stick deltas
     const g = pad != null && navigator.getGamepads && navigator.getGamepads()[pad];
     let dx = lookDX, dy = lookDY;
     lookDX = 0; lookDY = 0;
+    // Touch drains the same way the mouse does: accumulate in the handler,
+    // zero on read. A phone has no second stick, so this is the ONLY camera
+    // input it has — it comes from a slide on the held SWING zone.
+    dx += Touch.state.lookDX; dy += Touch.state.lookDY;
+    Touch.state.lookDX = Touch.state.lookDY = 0;
     if (g) { if (Math.abs(g.axes[2]) > 0.15) dx += g.axes[2] * 6; if (Math.abs(g.axes[3]) > 0.15) dy += g.axes[3] * 6; }
     return [dx, dy];
   },
+  /* Is a look pointer down right now? The camera's auto-recentre has to yield
+     while the player is deliberately framing, and it cannot infer that from
+     the deltas alone: a thumb holding a steady offset produces no deltas at
+     all, which is indistinguishable from nobody touching the glass. */
+  lookHeld() { return Touch.state.lookHeld; },
 
   // consume-once edges — a touch latch is consumed here too, so a tap that
   // lands between two frames is never dropped and never fires twice.

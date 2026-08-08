@@ -167,5 +167,154 @@ test.describe("touch controls", () => {
     await page.evaluate(() => window.dispatchEvent(new Event("blur")));
     expect(await page.evaluate(() => window.__spidey.input().swing),
       "SWING stayed held after the app lost focus").toBe(false);
+
+    // And the NEXT press must still work. This half is the actual bug: the
+    // release above cleared the shared `state`, but each hold() closure kept
+    // its own `id`, and nothing reset it — so `if (id != null) return` in
+    // pointerdown rejected every later press and SWING was dead until a page
+    // reload. iOS never reuses pointerIds, so the ghost id was permanent.
+    // Take a call, get an alert, switch apps: game over, silently.
+    await cdp.send("Input.dispatchTouchEvent", {
+      type: "touchStart", touchPoints: [{ x: swing.x, y: swing.y, id: 4 }],
+    });
+    expect(await page.evaluate(() => window.__spidey.input().swing),
+      "SWING could not be pressed again after backgrounding — the stale pointerId is back").toBe(true);
+  });
+
+  // The camera. A phone has no second stick and the controls sit above the
+  // canvas, so before this there was no touch source for Input.look() at all
+  // and the view could only be steered indirectly, by pushing the stick and
+  // waiting for the auto-recentre to catch up.
+  test.describe("the SWING zone also steers the camera", () => {
+    test("a slide looks without ever cancelling the hold", async ({ page, context }) => {
+      test.slow();
+      await bootTouch(page);
+      const swing = await centreOf(page, "#t-swing");
+      const cdp = await context.newCDPSession(page);
+
+      const yaw = () => page.evaluate(() => window.__spidey.camState().orbitYaw);
+      const before = await yaw();
+
+      await cdp.send("Input.dispatchTouchEvent", {
+        type: "touchStart", touchPoints: [{ x: swing.x, y: swing.y, id: 5 }],
+      });
+      expect(await page.evaluate(() => window.__spidey.input().swing)).toBe(true);
+      expect(await page.evaluate(() => window.__spidey.input().lookHeld)).toBe(true);
+
+      // A press alone must not move the view. A thumb rolls a few pixels as it
+      // presses, and without the dead zone every swing would come with an
+      // involuntary camera yank.
+      await cdp.send("Input.dispatchTouchEvent", {
+        type: "touchMove", touchPoints: [{ x: swing.x + 10, y: swing.y, id: 5 }],
+      });
+      expect(await yaw(), "a 10 px thumb roll moved the camera").toBe(before);
+
+      // Past the dead zone it steers — and the hold survives, which is the
+      // whole point of the dual-purpose control.
+      for (let i = 1; i <= 6; i++) {
+        await cdp.send("Input.dispatchTouchEvent", {
+          type: "touchMove", touchPoints: [{ x: swing.x + 10 + i * 20, y: swing.y, id: 5 }],
+        });
+      }
+      // The orbit is applied in the render loop, so this needs real frames —
+      // a handful at ~10 s each under SwiftShader. polling:100 is required,
+      // not decorative: Playwright polls on rAF by default and this page
+      // starves that poll badly enough that the declared timeout never fires.
+      await page.waitForFunction(() => window.__spidey.camState().orbitYaw !== 0,
+        { polling: 100, timeout: 60_000 });
+      expect(await page.evaluate(() => window.__spidey.input().swing),
+        "sliding to look released the swing — a look is not a cancel").toBe(true);
+
+      await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+      expect(await page.evaluate(() => window.__spidey.input().swing)).toBe(false);
+      expect(await page.evaluate(() => window.__spidey.input().lookHeld)).toBe(false);
+    });
+
+    // The per-control pointerId bookkeeping is the oldest rule in touch.js and
+    // has never been tested with two real fingers. One dispatch carrying two
+    // touchPoints is the only way to produce genuine simultaneity.
+    test("steering and swinging are independent fingers", async ({ page, context }) => {
+      test.slow();
+      await bootTouch(page);
+      const stick = await centreOf(page, "#t-stick");
+      const swing = await centreOf(page, "#t-swing");
+      const cdp = await context.newCDPSession(page);
+
+      await cdp.send("Input.dispatchTouchEvent", {
+        type: "touchStart",
+        touchPoints: [{ x: stick.x, y: stick.y, id: 6 }, { x: swing.x, y: swing.y, id: 7 }],
+      });
+      await cdp.send("Input.dispatchTouchEvent", {
+        type: "touchMove",
+        touchPoints: [{ x: stick.x + 40, y: stick.y, id: 6 }, { x: swing.x, y: swing.y, id: 7 }],
+      });
+      const both = await page.evaluate(() => window.__spidey.input());
+      expect(both.swing, "holding SWING while steering failed").toBe(true);
+      expect(both.moveX, "the stick did not steer with a second finger down").toBeGreaterThan(0.2);
+
+      // Move ONLY the swing finger. The stick must not follow it.
+      await cdp.send("Input.dispatchTouchEvent", {
+        type: "touchMove",
+        touchPoints: [{ x: stick.x + 40, y: stick.y, id: 6 }, { x: swing.x - 90, y: swing.y, id: 7 }],
+      });
+      const after = await page.evaluate(() => window.__spidey.input());
+      expect(after.moveX, "the swing finger's slide leaked into the stick").toBeCloseTo(both.moveX, 5);
+      expect(after.swing).toBe(true);
+    });
+  });
+
+  // The layout, at the size it is actually played at. iPhone 13 landscape is
+  // 844x390 CSS px with 47 px side insets and 21 px at the bottom; every other
+  // assertion in this file runs at 1280x720, which is 3.3x the real height and
+  // where fitting is trivial. The old button column was 246 px tall — 63% of
+  // this window — which nothing ever caught.
+  //
+  // Chromium reports env(safe-area-inset-*) as 0, so the insets are INJECTED
+  // through the --safe-* variables the CSS adds to env(). That is why they are
+  // written as `env(...) + var(...)` and not as env()'s own fallback, which
+  // only applies where env() is unsupported.
+  test.describe("at phone size", () => {
+    test.use({ viewport: { width: 844, height: 390 } });
+
+    test("every control fits inside the safe area and leaves the view clear", async ({ page }) => {
+      test.slow();
+      await bootTouch(page);
+      await page.evaluate(() => {
+        const r = document.documentElement.style;
+        r.setProperty("--safe-l", "47px"); r.setProperty("--safe-r", "47px");
+        r.setProperty("--safe-t", "0px"); r.setProperty("--safe-b", "21px");
+      });
+
+      const SAFE = { l: 47, r: 844 - 47, t: 0, b: 390 - 21 };
+      for (const sel of ["#t-btns", "#t-ring", "#t-swing .t-pill"]) {
+        const b = await page.locator(sel).boundingBox();
+        expect(b, `${sel} has no box`).not.toBeNull();
+        expect(b.x, `${sel} crosses the left inset`).toBeGreaterThanOrEqual(SAFE.l - 1);
+        expect(b.x + b.width, `${sel} crosses the right inset`).toBeLessThanOrEqual(SAFE.r + 1);
+        expect(b.y, `${sel} crosses the top inset`).toBeGreaterThanOrEqual(SAFE.t - 1);
+        expect(b.y + b.height, `${sel} crosses the home indicator`).toBeLessThanOrEqual(SAFE.b + 1);
+      }
+
+      // The zones may span the screen — they are invisible — but they must not
+      // reach the physical right edge, where Safari's edge-swipe-back lives.
+      // touch-action cannot prevent an OS gesture; not being there is the only
+      // defence available to a web page.
+      const zone = await page.locator("#t-swing").boundingBox();
+      expect(844 - (zone.x + zone.width),
+        "the SWING zone runs into Safari's edge-swipe-back gutter").toBeGreaterThanOrEqual(20);
+
+      // What the player can actually see. The visible furniture must leave the
+      // middle of the screen alone — that is where the city is.
+      const painted = [];
+      for (const sel of ["#t-btns", "#t-ring", "#t-swing .t-pill"]) {
+        painted.push(await page.locator(sel).boundingBox());
+      }
+      const midBand = { x0: 844 * 0.28, x1: 844 * 0.72, y0: 0, y1: 390 * 0.6 };
+      for (const b of painted) {
+        const overlaps = b.x < midBand.x1 && b.x + b.width > midBand.x0 &&
+                         b.y < midBand.y1 && b.y + b.height > midBand.y0;
+        expect(overlaps, "a control covers the middle of the view").toBe(false);
+      }
+    });
   });
 });

@@ -70,10 +70,31 @@ And the aiming method in 3D:
 > where the rays intersect physical geometry that's the point where you attach."
 > **[DEV]** https://code.tutsplus.com/swinging-physics-for-player-movement-as-seen-in-spider-man-2-and-energy-hook--gamedev-8782t
 
-Insomniac's 2018 game is the same in kind: webs attach to real building
-geometry, and the swing is a physics simulation — Insomniac said so publicly in
-June 2017 and it was widely reported.
-**[DEV, second-hand]** https://www.reddit.com/r/PS4/comments/6gx7tv/spiderman_ps4_swinging_is_all_physics_based_and/
+**CORRECTED — Insomniac's 2018 game does NOT raycast, and this passage used to
+say it did.** The swing is a physics simulation (Insomniac said so publicly in
+June 2017 and it was widely reported), but the *anchor selection* is not a ray
+cast against collision geometry. Mike Fitzgerald, Insomniac, in Variety:
+
+> "Every piece of architecture in the city is tagged with places webs can
+> attach, and as you swing around, **we find the perfect swing points to
+> preserve your momentum** and keep you flying towards your destination."
+> **[DEV]** https://variety.com/2018/gaming/features/spider-man-ps4-preview-1202873529/
+
+Two things follow, and they are the highest-leverage pair of changes available
+to this project:
+
+1. **Our `pickAnchor` ray fan is the *2004* design, not the 2018 one.** The
+   reference uses an authored attachment-point cloud. A procedurally generated
+   city can seed those points densely and deterministically along every edge
+   and roofline — strictly *easier* than Insomniac's authored problem — and
+   that is what removes our anchor desert, without lengthening `TETHER_MAX`
+   into a grappling hook.
+2. **Momentum preservation is the selection criterion**, developer-stated. Our
+   scorer has length-to-ideal, height, aim and side-alternation, and **no
+   velocity term at all**. That absence is the likeliest source of the "air
+   brakes" feel: grabbing an anchor that is not roughly perpendicular to travel.
+
+**[DEV, second-hand, for the physics claim only]** https://www.reddit.com/r/PS4/comments/6gx7tv/spiderman_ps4_swinging_is_all_physics_based_and/
 
 Fristrom is explicit that he *dislikes* the alternative:
 

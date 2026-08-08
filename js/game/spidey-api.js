@@ -99,7 +99,8 @@ export function createApi(G) {
       return true;
     },
     camState() {
-      return { eye: [...cams.eye], tgt: [...cams.tgt], fov: cams.fov, mode: cams.mode };
+      return { eye: [...cams.eye], tgt: [...cams.tgt], fov: cams.fov, mode: cams.mode,
+               orbitYaw: cams.orbitYaw, orbitPitch: cams.orbitPitch };
     },
 
     // ── world queries ────────────────────────────────────────────────────
@@ -138,6 +139,8 @@ export function createApi(G) {
         touch: Input.touchActive,
         moveX: Input.moveX(), moveZ: Input.moveZ(),
         swing: Input.swing(), dive: Input.dive(),
+        // lookHeld is non-consuming (look() itself is not, so it stays out).
+        lookHeld: Input.lookHeld(),
       };
     },
 
