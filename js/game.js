@@ -439,18 +439,19 @@ import { createApi } from "./game/spidey-api.js";
   window.addEventListener("resize", () => gfx.resize());
 
   // ── dev API ──────────────────────────────────────────────────────────────
+  // ApiPorts — a port exists because __spidey must EXPOSE that thing, never
+  // because a module needed a reference. Ratcheted at 16 (see CLAUDE.md).
   window.__spidey = createApi({
     get state() { return state; }, set state(v) { state = v; },
-    get paused() { return paused; }, set paused(v) { paused = v; },
     get headlessMode() { return headlessMode; }, set headlessMode(v) { headlessMode = v; },
     get frozen() { return frozen; }, set frozen(v) { frozen = v; },
     get testInput() { return testInput; }, set testInput(v) { testInput = v; },
     get city() { return city; },
     get citySeed() { return citySeed; },
-    hero, cams, gfx, audio: GameAudio, update, PHYS_DT, play, loadCity,
+    hero, cams, audio: GameAudio, update, PHYS_DT, play, loadCity,
     setSeed(n) { citySeed = n; store.set("citySeed", n); },
     snapPrev() { rPrev[0] = hero.p[0]; rPrev[1] = hero.p[1]; rPrev[2] = hero.p[2]; rPrevHead = hero.head; },
-    frame, presentOpts,
+    frame,
   });
 
   lastFrame = performance.now();

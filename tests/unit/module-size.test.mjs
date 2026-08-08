@@ -63,3 +63,64 @@ test("a ceiling is not left far above the file it guards", () => {
   }
   assert.deepEqual(slack, [], "a ceiling drifted far above its file — lower it so the ratchet keeps working");
 });
+
+/* ── the ApiPorts ratchet ────────────────────────────────────────────────────
+ * The object js/game.js hands to createApi(). It has ONE consumer, and it must
+ * stay that way: a port exists because __spidey needs to expose that thing,
+ * never because a module needed a reference across a file boundary. ES modules
+ * mean a module that needs something imports it. The sibling project's
+ * equivalent façade reached ~140 members, but only because IIFE modules cannot
+ * import — a forcing function that does not exist here. Ratcheting at 16 costs
+ * ten lines now instead of a quarter of untangling later.
+ */
+const PORT_CEILING = 16;
+
+function portNames() {
+  const src = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  const at = src.indexOf("createApi({");
+  assert.ok(at >= 0, "could not find the createApi({ … }) literal in js/game.js");
+  // Brace-match, then split on DEPTH-0 commas. A line-oriented regex undercounts
+  // silently: eight of these share one line, and a count that reads 11 instead
+  // of 19 makes the ratchet permanently green — which is worse than absent.
+  let i = src.indexOf("{", at), depth = 0, end = i;
+  for (; i < src.length; i++) {
+    if (src[i] === "{") depth++;
+    else if (src[i] === "}") { depth--; if (depth === 0) { end = i; break; } }
+  }
+  const body = src.slice(src.indexOf("{", at) + 1, end);
+  const parts = [];
+  let buf = "", d = 0;
+  for (const ch of body) {
+    if ("{[(".includes(ch)) d++;
+    else if ("}])".includes(ch)) d--;
+    if (ch === "," && d === 0) { parts.push(buf); buf = ""; continue; }
+    buf += ch;
+  }
+  parts.push(buf);
+  const names = new Set();
+  for (const p of parts) {
+    const m = p.replace(/\/\/[^\n]*/g, "").trim()
+      .match(/^(?:get|set)\s+([A-Za-z_$][\w$]*)|^([A-Za-z_$][\w$]*)/);
+    if (m) names.add(m[1] || m[2]);
+  }
+  return [...names];
+}
+
+test("ApiPorts stays small, and every port is read", () => {
+  const names = portNames();
+  assert.ok(names.length > 5, `the port parser found only ${names.length} — it is broken, not the code`);
+  assert.ok(names.length <= PORT_CEILING,
+    `ApiPorts has ${names.length} members, ceiling ${PORT_CEILING}.\n` +
+    "  A port is allowed only because __spidey must expose that thing. If a module\n" +
+    "  needs it, import the module. Deliberate? Raise PORT_CEILING and say why.");
+
+  // The half that earns its keep: a port nobody reads is the first symptom of a
+  // façade becoming a grab bag. This found three on its first run.
+  const api = fs.readFileSync(path.join(ROOT, "js/game/spidey-api.js"), "utf8");
+  assert.ok(!/\bports\s*\[|\bconst\s*\{[^}]*\}\s*=\s*G\b/.test(api),
+    "spidey-api.js uses computed or destructured port access — the dead-port scan below is unsound");
+  const dead = names.filter((n) => !new RegExp(`\\bG\\.${n}\\b`).test(api));
+  assert.deepEqual(dead, [],
+    `ApiPorts exposes ${dead.join(", ")} but js/game/spidey-api.js never reads it.\n` +
+    "  Delete the port, or if __spidey genuinely needs it, use it.");
+});

@@ -73,15 +73,61 @@ const PATHS = {
 // Modules that load in bare Node with no DOM/WebGL — the headless unit suites
 // import these directly, so a dependency creeping in that touches `window`
 // breaks `npm run test:tooling-fast` rather than failing silently in a browser.
-const HEADLESS_SAFE = [
-  "js/city/geom.js", "js/city/graph.js", "js/city/city-data.js",
-  "js/city/buildings.js", "js/city/colliders.js", "js/city/citygen.js",
-  "js/game/hero-consts.js", "js/game/hero.js", "js/hero/hero3d.js",
-  // cameras.js imports nothing and vantage() is pure over a colliders object,
-  // so the geometry clamp is testable in bare Node — which turned a 4-minute
-  // SwiftShader spec into a 1-second one (tests/unit/camera-los.test.mjs).
-  // Listing it here is what stops a future DOM import quietly taking that away.
-  "js/game/cameras.js",
-];
+/* ── THE LAYER TABLE ─────────────────────────────────────────────────────────
+ * The one place that says what a module is allowed to depend on. Checked
+ * against the REAL import graph by tests/unit/load-order.test.mjs, which
+ * classifies each module by its resolved repo-relative path — never by the
+ * spelling of a specifier. That distinction is the point: the guard this
+ * replaces was a regex over source text, and a regex measures how a module
+ * SPELLS its dependencies rather than what it does.
+ *
+ * Two edges carry the weight. **sim may not import viewmodel**, so no pose or
+ * camera state can feed back into physics. **viewmodel may not import view**,
+ * which is what keeps vantage() and pose() runnable in bare Node — the property
+ * that turned a four-minute SwiftShader spec into a one-second one.
+ *
+ * Prefixes ending in "/" match a directory; others match one file exactly.
+ * Every module must match exactly ONE prefix — zero or two is a failure, so a
+ * new file cannot be quietly unclassified.
+ */
+const LAYERS = {
+  // no imports, no state
+  math: ["js/mat4.js"],
+  // deterministic: no clock, no entropy, no IO, no view imports
+  sim: ["js/city/", "js/game/hero-consts.js", "js/game/hero.js"],
+  // pure derivation from sim state; may hold smoothing state and take dt.
+  // hero3d.js belongs here and not in view: it imports js/city/geom.js, holds
+  // nine damped pose scalars, takes dt, and imports nothing from js/render/.
+  viewmodel: ["js/game/cameras.js", "js/hero/hero3d.js"],
+  // owns GL, DOM, WebAudio, storage, rAF
+  view: [
+    "js/render/", "js/log.js", "js/game/hud.js", "js/game/audio.js",
+    "js/game/input.js", "js/game/touch.js", "js/game/store.js",
+    "js/game/webline.js",
+  ],
+  // the only modules importing both sides
+  driver: ["js/game.js", "js/game/spidey-api.js"],
+};
 
-module.exports = { ENTRY, MODULES, CSS, PATHS, HEADLESS_SAFE };
+const ALLOWED = {
+  math: [],
+  sim: ["math", "sim"],
+  viewmodel: ["math", "sim", "viewmodel"],
+  view: ["math", "sim", "viewmodel", "view"],
+  driver: ["math", "sim", "viewmodel", "view", "driver"],
+};
+
+/* Deliberate exceptions. `why` must be a real sentence — the test rejects a
+ * short one, so `why: "x"` is not an escape hatch. There is no flag and no env
+ * var on purpose: a guard people can --force around is worse than no guard. */
+const LAYER_EXCEPTIONS = [];   // { from, to, why }
+
+/* DERIVED, not hand-maintained. This list was written by hand and was wrong:
+ * js/game/cameras.js was added to it while it was calling performance.now()
+ * (it has done so since the original engine port), and js/mat4.js — which is
+ * headless-safe by construction — was simply never listed. The layer table now
+ * decides MEMBERSHIP; tests/unit/purity.test.mjs decides PURITY. */
+const HEADLESS_SAFE = [...LAYERS.math, ...LAYERS.sim, ...LAYERS.viewmodel]
+  .flatMap((p) => (p.endsWith("/") ? MODULES.filter((m) => m.startsWith(p)) : [p]));
+
+module.exports = { ENTRY, MODULES, CSS, PATHS, HEADLESS_SAFE, LAYERS, ALLOWED, LAYER_EXCEPTIONS };

@@ -132,16 +132,57 @@ tests/              unit (node --test, no browser) + specs (Playwright)
 - **Coordinates**: +Y up, metres, radians. Hero space is +Z forward. Building
   OBBs store `rot` as the yaw of the box's local +X axis.
 - **The hero's world position and velocity are the authority.** Camera, mesh
-  pose, HUD and `obs()` all read them. Exactly two things write back: the
-  tether constraint and capsule depenetration. Nothing else may move the hero.
+  pose, HUD and `obs()` all read them. There is **one commit point per step**
+  (`hero.js:249`) — every force, constraint and assist edits the *candidate*
+  position before it. After the commit exactly two things may correct it: the
+  ground/roof clamp (`:254`) and capsule depenetration (`:265`). `reset()` is
+  the only other writer, and **nothing outside `hero.js` writes `hero.p` at
+  all** (asserted).
+  *(This used to say "two things write back: the tether and depenetration".
+  That was wrong in both halves — the tether writes the locals `nx/ny/nz`, not
+  `p`, and the ground clamp is a third corrector the doc never mentioned. A
+  guard built on the old description would have enshrined it.)*
 - **A rigid constraint does no work.** The tether may redirect velocity; it may
   never lengthen it. Re-deriving velocity from a clamped position silently adds
   energy (measured: 146 m/s against a 52 m/s cap) — the rescale after the clamp
   in `hero.js` is load-bearing.
-- **Determinism is a feature.** No `Math.random` anywhere reachable from
-  `hero.step()` or `buildCity()`. Same seed and inputs must replay bit for bit,
-  or every A/B, benchmark and regression comparison this project runs is void.
-  Cosmetic randomness (particles, shake) stays out of that path.
+- **Determinism is a feature, and it is SAME-ENGINE only.** No `Math.random`
+  anywhere reachable from `hero.step()` or `buildCity()`. Same seed and inputs
+  replay identically **on the same engine** — which is what replay, A/B,
+  benchmarking and regression comparison need, and all of those are void
+  without it. Cosmetic randomness (particles, shake) stays out of that path.
+  It is **not** cross-engine reproducibility: ECMA-262 specifies
+  `Math.sin/cos/atan2/acos/exp/pow/hypot` as implementation-*approximated*,
+  `hero.js` uses all of them in the hot path, and `citygen.js:20` seeds the
+  entire city from `Math.sin(...)` — so two different JS engines can build two
+  different cities from seed 42. Do not build cross-client lockstep on this.
+- **Purity is proved by POISONING, not by grepping.** `tests/unit/purity.test.mjs`
+  makes `Math.random`, `Date.now`, `performance.now`, `new Date()` and
+  `crypto.getRandomValues` throw, then drives the sim/viewmodel modules through
+  a real workload. The regex guard it replaces is provably wrong in both
+  directions: `hud.js` writes DOM on every line of `update()` and passes
+  (its elements arrive by injection), and `hero.js`'s comment saying there is no
+  `Math.random` contains the string `Math.random`.
+  **The coverage assertions in that file are load-bearing.** Its first version
+  passed: `cameras.js`'s wall-clock read sits behind `if (shake > 0)` and 600
+  ticks never entered that branch. A poison test is exactly as good as its
+  branch coverage — which is how that call survived from the original engine
+  port, through the file being added to `HEADLESS_SAFE`, with every guard green.
+- **`tools/manifest.cjs` holds the LAYER TABLE**, and `HEADLESS_SAFE` is
+  **derived** from it rather than hand-maintained. Layers: math → sim →
+  viewmodel → view → driver. Two edges carry the weight: **sim may not import
+  viewmodel** (no pose or camera state feeding back into physics) and
+  **viewmodel may not import view** (what keeps `vantage()` and `pose()`
+  runnable in bare Node — the property that turned a four-minute SwiftShader
+  spec into a one-second one). A new module must land in exactly one layer;
+  being in none fails, which is the cheapest moment to decide what it is.
+  The escape hatch is a `LAYER_EXCEPTIONS` entry with a written `why`, not a flag.
+- **`ApiPorts` (the object `game.js` hands `createApi`) is ratcheted at 16**, and
+  a port nothing reads is a failure. A port exists because `__spidey` must
+  *expose* that thing — never because a module needed a reference across a file
+  boundary; this repo has ES modules, so a module that needs something imports
+  it. The sibling project's façade reached ~140 members only because IIFEs
+  *cannot* import, and that forcing function does not exist here.
 - **Effects live in the render/audio path, never in the physics step.** The
   physics step may set a bounded flag (`hero.landed`); the driver consumes it.
 

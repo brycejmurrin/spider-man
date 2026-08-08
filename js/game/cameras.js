@@ -50,6 +50,7 @@ export function createCameras(colliders) {
   let fov = 62, roll = 0, shake = 0, slipSm = 0;
   let orbitYaw = 0, orbitPitch = 0;    // player-drag offsets on the chase rig
   let holdT = 0;                       // seconds of recentre suspension left
+  let shakeT = 0;                      // shake phase clock — dt, never a wall clock
   let modeIdx = 0;
 
   /* solveEye(subject chest, desired eye, out) -> room
@@ -204,7 +205,15 @@ export function createCameras(colliders) {
       // trauma shake — squared so grazes barely move and slams hit hard
       if (shake > 0) {
         shake = Math.max(0, shake - dt * 1.6);
-        const a = shake * shake * 0.5, t = performance.now() * 0.05;
+        shakeT += dt;
+        // shakeT * 50 and the performance.now() * 0.05 this replaces both
+        // advance 50 per second, so the shake is rate-identical — do not
+        // "simplify" the constant. A wall clock here made the same inputs
+        // produce a different frame, which voids every A/B and replay the
+        // project runs; it came in with the original engine port and survived
+        // both the regex guard and being listed in HEADLESS_SAFE, because it
+        // sits behind `if (shake > 0)` and nothing ever drove that branch.
+        const a = shake * shake * 0.5, t = shakeT * 50;
         eye[0] += Math.sin(t * 1.3) * a; eye[1] += Math.sin(t * 1.7) * a * 0.6;
         tgt[0] += Math.sin(t * 1.1) * a * 0.4;
       }
@@ -215,7 +224,7 @@ export function createCameras(colliders) {
     snap(sub) {
       const v = vantage(sub, CAM_MODES[modeIdx].id);
       for (let i = 0; i < 3; i++) { eye[i] = v.eye[i]; tgt[i] = v.tgt[i]; }
-      fov = v.fov; roll = 0; shake = 0;
+      fov = v.fov; roll = 0; shake = 0; shakeT = 0;
     },
   };
 }

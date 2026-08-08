@@ -130,10 +130,96 @@ test("the on-screen build number is derived, not a stale literal", () => {
     "index.html must not hardcode window.__SPIDEY_BUILD = <number> (the ?v= bump does not touch it)");
 });
 
+// ── the layer table ─────────────────────────────────────────────────────────
+// Classify by RESOLVED repo-relative path, never by the text of a specifier.
+// The regex guard below is coupled to the spelling `../render/`; a resolved
+// path is not, so this is path-depth independent by construction.
+function layerOf(file) {
+  const hits = [];
+  for (const [layer, prefixes] of Object.entries(MANIFEST.LAYERS)) {
+    for (const p of prefixes) {
+      if (p.endsWith("/") ? file.startsWith(p) : file === p) { hits.push(layer); break; }
+    }
+  }
+  return hits;
+}
+
+test("every module lands in exactly one layer", () => {
+  // Zero matches means a new file was added without deciding what it IS, which
+  // is the moment that decision is cheapest. Two means the table overlaps.
+  const bad = MANIFEST.MODULES.map((m) => [m, layerOf(m)]).filter(([, h]) => h.length !== 1);
+  assert.deepEqual(bad, [], bad.map(([m, h]) =>
+    h.length === 0 ? `${m} is in no layer — add it to LAYERS in tools/manifest.cjs`
+                   : `${m} matches ${h.join(" and ")}`).join("\n"));
+});
+
+test("no layer prefix is stale", () => {
+  // A prefix matching nothing is a file that moved. Without this the entry
+  // silently classifies zero modules and the table quietly stops guarding them.
+  const dead = Object.entries(MANIFEST.LAYERS).flatMap(([l, ps]) =>
+    ps.filter((p) => !MANIFEST.MODULES.some((m) => (p.endsWith("/") ? m.startsWith(p) : m === p)))
+      .map((p) => `${l}: ${p}`));
+  assert.deepEqual(dead, [], `LAYERS prefixes matching no module: ${dead}`);
+});
+
+test("no module imports across a forbidden layer edge", () => {
+  const why = {
+    sim: "the simulation may not depend on anything that derives a view. If the " +
+         "sim genuinely needs this, the thing it needs is not a viewmodel — move it " +
+         "to sim, or invert the call so the driver passes the value in.",
+    viewmodel: "a viewmodel must stay runnable in bare Node. Importing view code is " +
+         "what turns a 1-second unit test back into a 4-minute browser spec.",
+    math: "math imports nothing.",
+    view: "", driver: "",
+  };
+  const violations = [];
+  for (const f of MANIFEST.MODULES) {
+    const from = layerOf(f)[0];
+    if (!from) continue;
+    for (const spec of staticImports(f)) {
+      if (!spec.startsWith(".")) continue;
+      const target = normalize(join(dirname(f), spec));
+      const to = layerOf(target)[0];
+      if (!to || MANIFEST.ALLOWED[from].includes(to)) continue;
+      if (MANIFEST.LAYER_EXCEPTIONS.some((e) => e.from === f && e.to === target)) continue;
+      violations.push(
+        `layer violation: ${f} (${from}) imports ${target} (${to})\n` +
+        `  ${from} may import: ${MANIFEST.ALLOWED[from].join(", ") || "nothing"}.\n` +
+        `  ${why[from]}\n` +
+        `  Deliberate? Add { from, to, why } to LAYER_EXCEPTIONS in tools/manifest.cjs.`);
+    }
+  }
+  assert.deepEqual(violations, [], violations.join("\n\n"));
+});
+
+test("layer exceptions carry a real reason", () => {
+  // The escape hatch is a sentence someone has to write and a reviewer reads,
+  // not a flag. `why: "x"` must not work.
+  for (const e of MANIFEST.LAYER_EXCEPTIONS) {
+    assert.ok(typeof e.why === "string" && e.why.length > 20,
+      `LAYER_EXCEPTIONS ${e.from} -> ${e.to} needs a why: explaining itself`);
+  }
+});
+
+test("deterministic layers use no dynamic import", () => {
+  // The walker cannot follow import(), so an edge hidden behind one would be
+  // silently unchecked. Ban it rather than pretend to cover it.
+  const checked = [...MANIFEST.LAYERS.math, ...MANIFEST.LAYERS.sim, ...MANIFEST.LAYERS.viewmodel];
+  const hits = MANIFEST.MODULES
+    .filter((m) => checked.some((p) => (p.endsWith("/") ? m.startsWith(p) : m === p)))
+    .filter((m) => /\bimport\s*\(/.test(readFileSync(join(ROOT, m), "utf8")));
+  assert.deepEqual(hits, [], `dynamic import in a checked layer (the graph walker cannot see it): ${hits}`);
+});
+
 test("headless-safe modules import nothing that touches the DOM or WebGL", () => {
-  // The unit suites import these directly in bare Node. A dependency creeping
-  // in that reaches for window/document/GLX must fail HERE, in 20 ms, not as a
-  // confusing crash inside an unrelated test.
+  // DEMOTED to a cheap early warning. It is provably incomplete: js/game/hud.js
+  // writes el.textContent on every line of update() and passes this, because
+  // its elements arrive by injection (createHud(els)) so no banned token ever
+  // appears in the file. It also false-positives on its own documentation —
+  // js/game/hero.js's comment saying there is no Math.random contains the
+  // string "Math.random". The layer table above decides MEMBERSHIP and
+  // tests/unit/purity.test.mjs decides PURITY; this only catches the obvious
+  // case fast.
   const banned = /\b(document|localStorage|requestAnimationFrame|navigator)\b|from "\.\.\/render\//;
   for (const f of MANIFEST.HEADLESS_SAFE) {
     const seen = new Set();
@@ -147,4 +233,44 @@ test("headless-safe modules import nothing that touches the DOM or WebGL", () =>
       }
     })(f);
   }
+});
+
+test("nothing outside hero.js writes the hero's position", () => {
+  // The CROSS-FILE half of the two-writer invariant, and only that half. A
+  // lexical audit inside hero.js would claim more than it can prove — it cannot
+  // see `const q = hero.p; q[0] = …`, a helper handed `p`, or a typed-array
+  // set — and it would redden on a rename or an extraction that changes
+  // nothing, which is how a guard teaches people to work around it. The
+  // in-file invariant is proved BEHAVIOURALLY by hero-swing.test.mjs ("the
+  // tether never stretches", "never inside a wall"), and those survive renames.
+  //
+  // This half is sound and catches the genuinely dangerous case: a renderer,
+  // the HUD or the dev API nudging the hero behind the model's back.
+  const bad = [];
+  for (const f of MANIFEST.MODULES) {
+    if (f === "js/game/hero.js") continue;
+    const src = readFileSync(join(ROOT, f), "utf8");
+    for (const m of src.matchAll(/\bhero\.p\s*(?:\[[^\]]*\]\s*=[^=]|\.(?:set|fill|copyWithin)\s*\()/g)) {
+      bad.push(`${f}: ${m[0].trim()}`);
+    }
+  }
+  assert.deepEqual(bad, [],
+    "only js/game/hero.js may write hero.p — the position is the authority and " +
+    "the model owns its commit point:\n  " + bad.join("\n  "));
+});
+
+test("js/render/ as a whole is ratcheted", () => {
+  // A DIRECTORY total, not per-file ceilings. Per-file numbers on 2,600 lines
+  // of GLSL held in JS strings measure nothing actionable — you cannot extract
+  // a fragment shader to satisfy a ratchet — and five ceilings that fire on
+  // legitimate work teach people that raising ceilings is routine, which
+  // corrodes the six in module-size.test.mjs that guard hand-written files.
+  // The total catches the hole the per-file ratchet actually has: moving 300
+  // lines into a new, unguarded file.
+  const CEILING = 6900;
+  const n = MANIFEST.MODULES.filter((m) => m.startsWith("js/render/"))
+    .reduce((a, m) => a + readFileSync(join(ROOT, m), "utf8").split("\n").length, 0);
+  assert.ok(n <= CEILING, `js/render/ is ${n} lines, ceiling ${CEILING}`);
+  assert.ok(CEILING - n <= Math.max(120, 0.08 * CEILING),
+    `js/render/ is ${n} lines but the ceiling is ${CEILING} — lower it so the ratchet keeps working`);
 });
